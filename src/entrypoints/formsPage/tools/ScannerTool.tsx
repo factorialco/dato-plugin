@@ -29,11 +29,16 @@ const validateFormsRemote = async (
 
 export const ScannerTool = ({ isLoading, onSubmit, ctx }: CommonToolProps) => {
   const scanForms = () =>
-    onSubmit((campaigns) => {
-      return validateFormsRemote(
+    onSubmit(async (campaigns, forms) => {
+      const invalidForms = await validateFormsRemote(
         campaigns,
         ctx.plugin.attributes.parameters.authorization as string
       );
+
+      return invalidForms.map((invalidForm) => ({
+        ...invalidForm,
+        name: forms[invalidForm.id].section_id,
+      }));
     });
 
   return (

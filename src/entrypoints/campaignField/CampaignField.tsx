@@ -72,7 +72,15 @@ export const MarketingFormCampaignField = ({ ctx }: Props) => {
     };
 
     validateField();
-  }, [ctx, contextValue, cleanValue, isValidating, cleanFormValue, setValue]);
+  }, [
+    ctx,
+    contextValue,
+    cleanValue,
+    isValidating,
+    cleanFormValue,
+    setValue,
+    setCleanValueHelper,
+  ]);
 
   return (
     <Canvas ctx={ctx}>

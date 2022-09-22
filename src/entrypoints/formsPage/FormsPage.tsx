@@ -10,15 +10,11 @@ import {
   Spinner,
 } from "datocms-react-ui";
 import s from "../styles.module.css";
-import {
-  ClassifiedFormBlocks,
-  DatoItem,
-  ResultItem,
-  ToolOption,
-} from "./forms.types";
-import { mapMarketingFormCampaign } from "./forms.utils";
+import { CustomFunction, ResultItem, ToolOption } from "./forms.types";
+
 import { Tool } from "./tools/Tool";
 import { getAllForms } from "./forms.services";
+import { mapMarketingFormCampaign } from "./forms.utils";
 
 const TOOL_OPTIONS: ToolOption[] = [
   { label: "Campaign Search", value: "search" },
@@ -31,7 +27,6 @@ export type FormsPageProps = {
 
 export const FormsPage = ({ ctx }: FormsPageProps) => {
   const [selectedTool, setSelectedTool] = useState(TOOL_OPTIONS[0]);
-  const [forms, setForms] = useState<Record<string, DatoItem>>({});
   const [resultForms, setResultForms] = useState<ResultItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -44,20 +39,19 @@ export const FormsPage = ({ ctx }: FormsPageProps) => {
     }
   }, [ctx.currentUserAccessToken, ctx.environment]);
 
-  const onSubmit = async (
-    customFunction: (campaigns: ClassifiedFormBlocks) => Promise<ResultItem[]>
-  ) => {
+  const onSubmit = async (customFunction: CustomFunction) => {
     try {
       if (client) {
         setIsLoading(true);
 
         const forms = await getAllForms(client);
-        const classifiedCampaigns = mapMarketingFormCampaign(forms);
-        const results = await customFunction(classifiedCampaigns);
+        const classifiedCampaigns = mapMarketingFormCampaign(
+          Object.values(forms)
+        );
+        const results = await customFunction(classifiedCampaigns, forms);
 
         setIsLoading(false);
         setResultForms(results);
-        setForms(forms);
       }
     } catch (e) {
       setIsLoading(false);
@@ -111,7 +105,7 @@ export const FormsPage = ({ ctx }: FormsPageProps) => {
                 <Spinner placement="inline" />
               </div>
             ) : resultForms.length ? (
-              resultForms.map(({ id, text }) => {
+              resultForms.map(({ id, text, name }) => {
                 return (
                   <div
                     className={s.result}
@@ -120,7 +114,7 @@ export const FormsPage = ({ ctx }: FormsPageProps) => {
                       ctx.editItem(id);
                     }}
                   >
-                    <div>{forms[id]?.section_id}</div>
+                    <div>{name}</div>
                     <div className={s.resultMessage}>{text}</div>
                   </div>
                 );

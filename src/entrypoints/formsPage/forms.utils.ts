@@ -1,10 +1,10 @@
 import { MARKETING_FORM_CAMPAIGN } from "../../constants/marketingFormCampaign";
 import { ClassifiedFormBlocks, DatoItem } from "./forms.types";
 
-export const mapMarketingFormCampaign = (forms: Record<string, DatoItem>) => {
+export const mapMarketingFormCampaign = (forms: DatoItem[]) => {
   const classifiedForms: ClassifiedFormBlocks = {};
 
-  Object.values(forms).forEach((form) => {
+  forms.forEach((form) => {
     classifiedForms[form.id] = getNestedValues(
       form,
       "attributes",

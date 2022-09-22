@@ -8,8 +8,8 @@ export const SearchTool = ({ isLoading, onSubmit }: CommonToolProps) => {
   const [query, setQuery] = useState("");
 
   const queryCampaign = (query: string) =>
-    onSubmit(async (campaigns) =>
-      Object.entries(campaigns)
+    onSubmit(async (campaigns, forms) => {
+      return Object.entries(campaigns)
         .filter(([_, campaigns]) =>
           campaigns.some((campaign) =>
             campaign.marketing_form_campaign
@@ -17,8 +17,11 @@ export const SearchTool = ({ isLoading, onSubmit }: CommonToolProps) => {
               .includes(query.toLowerCase())
           )
         )
-        .map(([id]) => ({ id }))
-    );
+        .map(([id]) => ({
+          id,
+          name: forms[id].section_id,
+        }));
+    });
 
   return (
     <form
@@ -37,7 +40,11 @@ export const SearchTool = ({ isLoading, onSubmit }: CommonToolProps) => {
           value={query}
         />
       </div>
-      <Button type="submit" disabled={isLoading || !query} className={s.button}>
+      <Button
+        type="submit"
+        disabled={isLoading || !query || query.length < 2}
+        className={s.button}
+      >
         Search
       </Button>
     </form>
