@@ -20,7 +20,7 @@ export const handleEmptyValue = ({
       .openConfirm({
         title: "The marketing_form_campaign field should not be empty!",
         content:
-          "Please set a valid marketing_form_campaign and try again. This field is extremelly important. If its value is not correct, we will lose money.",
+          "Please set a valid marketing_form_campaign and try again. This field is extremely important. If its value is not correct, we will lose money.",
         choices: [{ label: "Ok", value: "ok" }],
         cancel: { label: "Close", value: "close" },
       })
