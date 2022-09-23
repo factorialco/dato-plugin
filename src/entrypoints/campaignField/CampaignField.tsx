@@ -12,15 +12,14 @@ type Props = {
 };
 
 export const MarketingFormCampaignField = ({ ctx }: Props) => {
-  const [cleanFormValue, setCleanFormValue] = useState(
-    JSON.parse(JSON.stringify(ctx.formValues))
-  );
   const [currentValue, setCurrentValue] = useState(() =>
     getValueFromContext(ctx)
   );
   const [cleanValue, setCleanValue] = useState(currentValue);
 
+  const hasValidated = useRef(false);
   const isValidating = useRef(false);
+
   const contextValue = useMemo(() => getValueFromContext(ctx), [ctx]);
 
   const setValue = useCallback(
@@ -31,12 +30,13 @@ export const MarketingFormCampaignField = ({ ctx }: Props) => {
     [ctx, setCurrentValue]
   );
 
-  const setCleanValueHelper = useCallback(
+  const finishValidation = useCallback(
     (cleanValue: string) => {
+      hasValidated.current = true;
+      isValidating.current = false;
       setCleanValue(cleanValue);
-      setCleanFormValue(ctx.formValues);
     },
-    [ctx.formValues]
+    [setCleanValue, hasValidated, isValidating]
   );
 
   useEffect(() => {
@@ -44,42 +44,41 @@ export const MarketingFormCampaignField = ({ ctx }: Props) => {
       try {
         if (
           !isValidating.current &&
-          ctx.itemStatus === "published" &&
-          !ctx.isFormDirty
+          !hasValidated.current &&
+          !ctx.isFormDirty &&
+          ctx.itemStatus === "published"
         ) {
+          isValidating.current = true;
           if (!contextValue) {
             handleEmptyValue({
-              cleanFormValue,
               ctx,
-              isValidating,
-              setCleanValue: setCleanValueHelper,
+              finishValidation,
+              contextValue,
             });
-          } else if (cleanValue !== contextValue) {
+          } else {
             await handleDifferentValue({
-              isValidating,
               ctx,
               contextValue,
-              cleanValue,
-              setCleanValue: setCleanValueHelper,
-              setValue,
+              finishValidation,
+              hasValidated,
             });
           }
         }
       } catch (e) {
         console.error(e);
-        isValidating.current = false;
+        finishValidation(contextValue);
       }
     };
 
     validateField();
   }, [
     ctx,
+    setValue,
     contextValue,
     cleanValue,
     isValidating,
-    cleanFormValue,
-    setValue,
-    setCleanValueHelper,
+    hasValidated,
+    finishValidation,
   ]);
 
   return (
@@ -90,7 +89,10 @@ export const MarketingFormCampaignField = ({ ctx }: Props) => {
         label={""}
         value={currentValue}
         error={!currentValue && "The field is required."}
-        onChange={setValue}
+        onChange={(newValue) => {
+          hasValidated.current = cleanValue === newValue;
+          setValue(newValue);
+        }}
       />
     </Canvas>
   );
