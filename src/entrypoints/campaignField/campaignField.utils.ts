@@ -1,56 +1,45 @@
 import get from "lodash-es/get";
 import { RenderFieldExtensionCtx } from "datocms-plugin-sdk";
-import { isEqual } from "lodash-es";
 import { remoteValidation } from "./campaignField.services";
 
+const TOAST_DURATION = 5000;
+
 export const handleEmptyValue = ({
-  cleanFormValue,
-  isValidating,
+  contextValue,
   ctx,
-  setCleanValue,
+  finishValidation,
 }: {
-  isValidating: React.MutableRefObject<boolean>;
   ctx: RenderFieldExtensionCtx;
-  cleanFormValue: any;
-  setCleanValue: (value: any) => void;
+  contextValue: string;
+  finishValidation: (cleanValue: string) => void;
 }) => {
-  if (!isEqual(cleanFormValue, ctx.formValues)) {
-    isValidating.current = true;
-    ctx
-      .openConfirm({
-        title: "The marketing_form_campaign field should not be empty!",
-        content:
-          "Please set a valid marketing_form_campaign and try again. This field is extremely important. If its value is not correct, we will lose money.",
-        choices: [{ label: "Ok", value: "ok" }],
-        cancel: { label: "Close", value: "close" },
-      })
-      .then(() => {
-        isValidating.current = false;
-        setCleanValue("");
-      });
-  }
+  ctx
+    .openConfirm({
+      title: "The marketing_form_campaign field should not be empty!",
+      content:
+        "Please set a valid marketing_form_campaign and try again. This field is extremely important. If its value is not correct, we will lose money.",
+      choices: [{ label: "Ok", value: "ok" }],
+      cancel: { label: "Close", value: "close" },
+    })
+    .then(() => {
+      finishValidation(contextValue);
+    });
 };
 
 export const handleDifferentValue = async ({
-  isValidating,
   ctx,
   contextValue,
-  cleanValue,
-  setCleanValue,
-  setValue,
+  finishValidation,
 }: {
-  isValidating: React.MutableRefObject<boolean>;
   contextValue: string;
-  cleanValue: string;
-  setCleanValue: (value: string) => void;
-  setValue: (value: any) => void;
+  hasValidated: React.MutableRefObject<boolean>;
+  finishValidation: (cleanValue: string) => void;
   ctx: RenderFieldExtensionCtx;
 }) => {
-  isValidating.current = true;
   ctx.customToast({
     type: "warning",
     message: "Please wait, validating marketing form campaign...",
-    dismissAfterTimeout: 7000,
+    dismissAfterTimeout: TOAST_DURATION,
   });
 
   return remoteValidation(
@@ -61,45 +50,34 @@ export const handleDifferentValue = async ({
       ctx.customToast({
         type: "alert",
         message:
-          "Could not ensure that the new marketing_form_campaign value is valid!",
-        dismissAfterTimeout: 10000,
+          "Could not ensure that the marketing_form_campaign value is valid!",
+        dismissAfterTimeout: TOAST_DURATION,
       });
       ctx
         .openConfirm({
-          title: "Are you sure you want to change the marketing form campaign?",
+          title: "Could not validate the marketing form campaign!",
           content: `Please ensure that the "${contextValue}" marketing form campaign exists and is correct.
                 This field is extremely important. If its value is not correct, we will lose money.`,
-          cancel: { label: "Cancel", value: "cancel" },
+          cancel: { label: "Close", value: "cancel" },
           choices: [
             {
-              label: "It may be wrong",
+              label: "Ok",
               value: "cancel",
               intent: "negative",
             },
-            {
-              label: "It is correct",
-              value: "confirm",
-              intent: "positive",
-            },
           ],
         })
-        .then((userChoice) => {
-          if (userChoice === "cancel") {
-            setValue(cleanValue);
-            ctx.saveCurrentItem();
-          } else {
-            setCleanValue(contextValue);
-          }
-          isValidating.current = false;
+        .then(() => {
+          finishValidation(contextValue);
         });
     } else {
       ctx.customToast({
         type: "notice",
         message: "Valid marketing form campaign!",
-        dismissAfterTimeout: 3000,
+        dismissAfterTimeout: TOAST_DURATION,
       });
-      setCleanValue(contextValue);
-      isValidating.current = false;
+
+      finishValidation(contextValue);
     }
   });
 };
