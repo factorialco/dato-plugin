@@ -9,7 +9,7 @@ export const validateFormBatch = async (
       unknown,
       { data: { invalidForms: { id: string; reason?: string }[] } }
     >(
-      process.env.REACT_APP_VALIDATE_BATCH_ENDPOINT as string,
+      `${process.env.REACT_APP_BASE_PATH}/api/dato/form_campaign/validate_batch`,
       {
         forms,
       },

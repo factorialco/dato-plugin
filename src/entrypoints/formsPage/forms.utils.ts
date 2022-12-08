@@ -1,4 +1,4 @@
-import { MARKETING_FORM_CAMPAIGN } from "../../constants/marketingFormCampaign";
+import { MARKETING_FORM_CAMPAIGN } from "../../constants";
 import { ClassifiedFormBlocks, DatoItem } from "./forms.types";
 
 export const mapMarketingFormCampaign = (forms: DatoItem[]) => {

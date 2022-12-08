@@ -17,11 +17,8 @@ yarn run start
 ## Env
 
 ```
-REACT_APP_VALIDATE_ENDPOINT -> /api/form_campaign/validate (webpage)
-
-REACT_APP_VALIDATE_BATCH_ENDPOINT -> /api/form_campaign/validate-batch (webpage)
+REACT_APP_BASE_PATH -> https://factorialhr.com (webpage)
 ```
-
 
 ## Description
 
@@ -37,6 +34,7 @@ This plugin adds the following functionality.
 The plugin can be easily extended to further tailor to the Factorial needs.
 
 ### Known limitations
+
 - This is not a true validation, the plugin has no way to prevent the user from saving. This may change in the future with updates to the Dato Plugin SDK.
 - The validation does not work when the modal is closed right after saving. This is specially a problem because some DatoCMS views close by default after saving.
 

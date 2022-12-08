@@ -2,7 +2,7 @@ import { Button, TextField } from "datocms-react-ui";
 import { useState } from "react";
 import { CommonToolProps } from "../forms.types";
 import s from "../../styles.module.css";
-import { MARKETING_FORM_CAMPAIGN } from "../../../constants/marketingFormCampaign";
+import { MARKETING_FORM_CAMPAIGN } from "../../../constants";
 
 export const SearchTool = ({ isLoading, onSubmit }: CommonToolProps) => {
   const [query, setQuery] = useState("");
