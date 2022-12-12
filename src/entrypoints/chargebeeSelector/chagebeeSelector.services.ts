@@ -1,26 +1,19 @@
 import axios from "axios";
+import { Plan } from "./types";
 
-const ENDPOINTS = {
-  bundle: "bundle_addons",
-  plan: "plan_addons",
-  usage: "usage_addons",
-  addon: "addon_addons",
-  core: "core_plans",
-};
+export type ChargebeeElements = "bundle" | "plan" | "usage" | "addon" | "core";
 
-export type ChargebeeElements = keyof typeof ENDPOINTS;
-
-export const getElements = async <T>(
+export const getElements = async (
   chargebeeElement: ChargebeeElements,
   authorization: string
 ) => {
-  const result = await axios.get<{}, { data: { elements: T[] } }>(
-    `${process.env.REACT_APP_BASE_PATH}/api/dato/pricing/${ENDPOINTS[chargebeeElement]}`,
+  const result = await axios.get<{}, { data: { plans: Plan[] } }>(
+    `${process.env.REACT_APP_BASE_PATH}/api/dato/pricing/${chargebeeElement}`,
     {
       headers: {
         Authorization: authorization,
       },
     }
   );
-  return result.data.elements;
+  return result.data.plans;
 };

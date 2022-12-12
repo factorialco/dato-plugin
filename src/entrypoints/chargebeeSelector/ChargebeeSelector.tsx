@@ -11,17 +11,15 @@ import {
 import { useEffect, useState } from "react";
 import { getValueFromContext } from "./chargbeeSelector.utils";
 import { ChargebeeElements, getElements } from "./chagebeeSelector.services";
+import { Plan } from "./types";
 
 type Props = {
   ctx: RenderFieldExtensionCtx;
   chargebeeElement: ChargebeeElements;
 };
 
-export const ChargbeeSelector = <T extends { name: string }>({
-  ctx,
-  chargebeeElement,
-}: Props) => {
-  const [elements, setAddons] = useState<T[]>(() => []);
+export const ChargbeeSelector = ({ ctx, chargebeeElement }: Props) => {
+  const [elements, setAddons] = useState<Plan[]>(() => []);
   const [activeElement, setActiveElement] = useState(() =>
     getValueFromContext(ctx)
   );
@@ -32,12 +30,14 @@ export const ChargbeeSelector = <T extends { name: string }>({
       ctx.fieldPath,
       activeElement === name
         ? null
-        : elements.find(({ name: elementName }) => elementName === name)
+        : JSON.stringify(
+            elements.find(({ name: elementName }) => elementName === name)
+          )
     );
   };
 
   useEffect(() => {
-    getElements<T>(
+    getElements(
       chargebeeElement,
       ctx.plugin.attributes.parameters.authorization as string
     ).then((auxAddons) => setAddons(auxAddons));
@@ -45,31 +45,36 @@ export const ChargbeeSelector = <T extends { name: string }>({
 
   return (
     <Canvas ctx={ctx}>
-      <div style={{ height: "200px" }}>
-        <Dropdown
-          renderTrigger={({ open, onClick }) => (
-            <Button
-              disabled={elements.length === 0}
-              onClick={onClick}
-              rightIcon={open ? <CaretUpIcon /> : <CaretDownIcon />}
-            >
-              {activeElement || "Select an addon"}
-            </Button>
-          )}
-        >
-          <DropdownMenu>
-            {elements.map(({ name }) => (
-              <DropdownOption
-                key={name}
-                active={name === activeElement}
-                closeMenuOnClick
-                onClick={toggleAddon(name)}
+      <div style={{ height: "200px", width: "100%", display: "flex" }}>
+        <div style={{ flexGrow: 1 }}>
+          <Dropdown
+            renderTrigger={({ open, onClick }) => (
+              <Button
+                style={{ width: "100%" }}
+                disabled={elements.length === 0}
+                onClick={onClick}
+                rightIcon={open ? <CaretUpIcon /> : <CaretDownIcon />}
               >
-                {name}
-              </DropdownOption>
-            ))}
-          </DropdownMenu>
-        </Dropdown>
+                {activeElement || "Select from chargebee"}
+              </Button>
+            )}
+          >
+            <DropdownMenu>
+              {elements
+                .sort((a, b) => (a.name > b.name ? 1 : -1))
+                .map(({ name }) => (
+                  <DropdownOption
+                    key={name}
+                    active={name === activeElement}
+                    closeMenuOnClick
+                    onClick={toggleAddon(name)}
+                  >
+                    {name}
+                  </DropdownOption>
+                ))}
+            </DropdownMenu>
+          </Dropdown>
+        </div>
       </div>
     </Canvas>
   );

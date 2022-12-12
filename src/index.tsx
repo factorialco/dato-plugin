@@ -12,7 +12,6 @@ import { MarketingFormCampaignField } from "./entrypoints/campaignField/Campaign
 import { FormsPage } from "./entrypoints/formsPage/FormsPage";
 import { CHARGEBEE_SELECTOR, MARKETING_FORM_CAMPAIGN } from "./constants";
 import { ChargbeeSelector } from "./entrypoints/chargebeeSelector/ChargebeeSelector";
-import { Addon, Plan } from "./entrypoints/chargebeeSelector/types";
 
 const FORMS_PAGE_ID = "forms";
 const CAMPAIGN_FIELD_ID = "marketingFormCampaign";
@@ -43,23 +42,23 @@ connect({
         switch (ctx.itemType.attributes.api_key) {
           case "pricing_core_plan":
             return render(
-              <ChargbeeSelector<Plan> ctx={ctx} chargebeeElement="core" />
+              <ChargbeeSelector ctx={ctx} chargebeeElement="core" />
             );
           case "pricing_usage_limit":
             return render(
-              <ChargbeeSelector<Addon> ctx={ctx} chargebeeElement="usage" />
+              <ChargbeeSelector ctx={ctx} chargebeeElement="usage" />
             );
           case "pricing_addon":
             return render(
-              <ChargbeeSelector<Addon> ctx={ctx} chargebeeElement="addon" />
+              <ChargbeeSelector ctx={ctx} chargebeeElement="addon" />
             );
           case "pricing_bundle":
             return render(
-              <ChargbeeSelector<Addon> ctx={ctx} chargebeeElement="bundle" />
+              <ChargbeeSelector ctx={ctx} chargebeeElement="bundle" />
             );
           case "pricing_normal_plan":
             return render(
-              <ChargbeeSelector<Addon> ctx={ctx} chargebeeElement="plan" />
+              <ChargbeeSelector ctx={ctx} chargebeeElement="plan" />
             );
         }
     }
