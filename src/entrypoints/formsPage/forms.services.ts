@@ -10,7 +10,7 @@ export const getAllForms = async (client: Client) => {
     filter: {
       type: FORM_MODEL_ID,
     },
-    nested: FORM_CONTENT_INPUT_ID,
+    nested: FORM_CONTENT_INPUT_ID as any,
   })) {
     formsById[form.id] = form as unknown as DatoItem;
   }
@@ -28,7 +28,7 @@ export const getFormsByCampaign = async (
       type: FORM_MODEL_ID,
       query: campaign,
     },
-    nested: FORM_CONTENT_INPUT_ID,
+    nested: FORM_CONTENT_INPUT_ID as any,
   })) {
     forms.push(form as unknown as DatoItem);
   }

@@ -44,7 +44,7 @@ export const FormsPage = ({ ctx }: FormsPageProps) => {
       if (client) {
         setIsLoading(true);
 
-        const forms = await getAllForms(client);
+        const forms = await getAllForms(client as any);
         const classifiedCampaigns = mapMarketingFormCampaign(
           Object.values(forms)
         );
