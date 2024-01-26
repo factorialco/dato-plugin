@@ -2,20 +2,6 @@ import { RenderItemFormSidebarCtx } from "datocms-plugin-sdk";
 import { useRef, useState } from "react";
 import { Button, Canvas } from "datocms-react-ui";
 
-export const NOT_SUPORTED_COMPONENTS: string[] = [
-  "CardsBlockRecord",
-  "HeroRecord",
-  "BenefitCardRecord",
-  "BenefitGridRecord",
-  "FeatureRecord",
-  "LeadGeneratorRecord",
-  "BannerRecord",
-  "AbtestRecord",
-  "HomepageRecord",
-  "PageRecord",
-  "ResourceRecord",
-];
-
 const PreviewSidebar = ({
   ctx,
 }: {
@@ -45,7 +31,7 @@ const PreviewSidebar = ({
       lang: ctx.locale.replace("-", "_"),
     }).toString();
 
-    return `https://4000--main--webpage-2--ginesortiz.coder.factorial.dev/cms/preview/${typename}?${queryParams}`;
+    return `https://factorialhr.com/cms/preview/${typename}?${queryParams}`;
   };
 
   return (
