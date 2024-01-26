@@ -1,13 +1,15 @@
-import { connect, Field, FieldIntentCtx, IntentCtx } from "datocms-plugin-sdk";
+import { connect, Field, FieldIntentCtx, IntentCtx, ItemType, RenderItemFormSidebarCtx } from "datocms-plugin-sdk";
 import { render } from "./utils/render";
 import ConfigScreen from "./entrypoints/configScreen/ConfigScreen";
 import "datocms-react-ui/styles.css";
 import { MarketingFormCampaignField } from "./entrypoints/campaignField/CampaignField";
 import { FormsPage } from "./entrypoints/formsPage/FormsPage";
 import { MARKETING_FORM_CAMPAIGN } from "./constants/marketingFormCampaign";
+import PreviewSidebar from "./entrypoints/PreviewSidebar";
 
 const FORMS_PAGE_ID = "forms";
 const CAMPAIGN_FIELD_ID = "marketingFormCampaign";
+const PREVIEW_SIDEBAR_ID = "sideBySidePreview";
 
 connect({
   renderConfigScreen(ctx) {
@@ -34,7 +36,7 @@ connect({
       {
         label: "Forms",
         icon: "toolbox",
-        placement: ["before", "settings"],
+        // placement: ["before", "settings"],
         pointsTo: {
           pageId: FORMS_PAGE_ID,
         },
@@ -46,6 +48,24 @@ connect({
     switch (pageId) {
       case FORMS_PAGE_ID:
         return render(<FormsPage ctx={ctx} />);
+    }
+  },
+
+  itemFormSidebars(model: ItemType, ctx: IntentCtx) {
+    return [
+      {
+        id: "sideBySidePreview",
+        label: "Live preview",
+        preferredWidth: 900,
+        startOpen: true,
+      },
+    ];
+  },
+
+  renderItemFormSidebar(sidebarId, ctx: RenderItemFormSidebarCtx) {
+    switch (sidebarId) {
+      case PREVIEW_SIDEBAR_ID:
+        return render(<PreviewSidebar ctx={ctx as any} />);
     }
   },
 });
