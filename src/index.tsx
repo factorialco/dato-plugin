@@ -36,7 +36,6 @@ connect({
       {
         label: "Forms",
         icon: "toolbox",
-        // placement: ["before", "settings"],
         pointsTo: {
           pageId: FORMS_PAGE_ID,
         },

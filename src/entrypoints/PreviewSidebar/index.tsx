@@ -2,11 +2,7 @@ import { RenderItemFormSidebarCtx } from "datocms-plugin-sdk";
 import { useRef, useState } from "react";
 import { Button, Canvas } from "datocms-react-ui";
 
-const PreviewSidebar = ({
-  ctx,
-}: {
-  ctx: RenderItemFormSidebarCtx & { itemValue: any };
-}) => {
+const PreviewSidebar = ({ ctx }: { ctx: RenderItemFormSidebarCtx }) => {
   const itemId = ctx.item?.relationships.item_type.data.id as string;
   const typename = ctx.itemTypes?.[itemId]?.attributes.api_key.replace(
     /(?:^|_)(.)/g,
