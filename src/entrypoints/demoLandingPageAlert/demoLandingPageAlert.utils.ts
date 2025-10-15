@@ -22,10 +22,7 @@ export const handleDemoLandingPageCreation = async (ctx: any, currentInstance: a
   }
 };
 
-export const checkDemoLandingPageLimits = (
-  existingInstances: any[],
-  currentInstance?: any
-): { canCreate: boolean; message?: string } => {
+const getTotalCounts = (existingInstances: any[], currentInstance: any): { original: number; variant: number } => {
   const originalInstances = existingInstances.filter((instance: any) => instance.variant === "original");
   const variantInstances = existingInstances.filter((instance: any) => instance.variant === "variant");
 
@@ -40,12 +37,24 @@ export const checkDemoLandingPageLimits = (
     totalVariantCount += 1;
   }
 
-  const invalidOriginalCount = totalOriginalCount > 1;
-  const invalidVariantCount = totalVariantCount > 1;
+  return {
+    original: originalInstances.length,
+    variant: variantInstances.length,
+  };
+};
+
+export const checkDemoLandingPageLimits = (
+  existingInstances: any[],
+  currentInstance?: any
+): { canCreate: boolean; message?: string } => {
+  const { original, variant } = getTotalCounts(existingInstances, currentInstance);
+
+  const invalidOriginalCount = original > 1;
+  const invalidVariantCount = variant > 1;
 
   if (invalidOriginalCount || invalidVariantCount) {
-    const originalMessage = invalidOriginalCount ? `Original pages: ${totalOriginalCount} (max 1). ` : '';
-    const variantMessage = invalidVariantCount ? `Variant pages: ${totalVariantCount} (max 1).` : '';
+    const originalMessage = invalidOriginalCount ? `Original pages: ${original} (max 1). ` : '';
+    const variantMessage = invalidVariantCount ? `Variant pages: ${variant} (max 1).` : '';
 
     return {
       canCreate: false,
