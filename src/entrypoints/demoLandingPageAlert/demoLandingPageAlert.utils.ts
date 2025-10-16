@@ -20,23 +20,23 @@ export const handleDemoLandingPageCreation = async (ctx: any, currentInstance: a
   }
 };
 
-const getTotalCounts = (existingInstances: any[], currentInstance: any): { originalCount: number; variantCount: number } => {
-  const originalInstances = existingInstances.filter((instance: any) => instance.variant === "original");
+const getTotalCounts = (existingInstances: any[], currentInstance: any): { controlCount: number; variantCount: number } => {
+  const controlInstances = existingInstances.filter((instance: any) => instance.variant === "control");
   const variantInstances = existingInstances.filter((instance: any) => instance.variant === "variant");
 
-  let originalCount = originalInstances.length;
+  let controlCount = controlInstances.length;
   let variantCount = variantInstances.length;
 
   const currentInstanceVariant = currentInstance?.attributes?.variant;
 
-  if (currentInstanceVariant === "original") {
-    originalCount += 1;
+  if (currentInstanceVariant === "control") {
+    controlCount += 1;
   } else if (currentInstanceVariant === "variant") {
     variantCount += 1;
   }
 
   return {
-    originalCount,
+    controlCount,
     variantCount,
   };
 };
@@ -45,18 +45,18 @@ export const checkDemoLandingPageLimits = (
   existingInstances: any[],
   currentInstance?: any
 ): { canCreate: boolean; message?: string } => {
-  const { originalCount, variantCount } = getTotalCounts(existingInstances, currentInstance);
+  const { controlCount, variantCount } = getTotalCounts(existingInstances, currentInstance);
 
-  const invalidOriginalCount = originalCount > 1;
+  const invalidControlCount = controlCount > 1;
   const invalidVariantCount = variantCount > 1;
 
-  if (invalidOriginalCount || invalidVariantCount) {
-    const originalMessage = invalidOriginalCount ? `Original pages: ${originalCount} (max 1). ` : '';
+  if (invalidControlCount || invalidVariantCount) {
+    const controlMessage = invalidControlCount ? `Control pages: ${controlCount} (max 1). ` : '';
     const variantMessage = invalidVariantCount ? `Variant pages: ${variantCount} (max 1).` : '';
 
     return {
       canCreate: false,
-      message: `🚨 Demo Landing Page published limit exceeded. ${originalMessage} ${variantMessage}`,
+      message: `🚨 Demo Landing Page published limit exceeded. ${controlMessage} ${variantMessage}`,
     };
   }
 
