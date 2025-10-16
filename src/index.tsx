@@ -1,4 +1,4 @@
-import { connect, Field, FieldIntentCtx, IntentCtx, ItemType, RenderItemFormSidebarCtx } from "datocms-plugin-sdk";
+import { connect, Field, ItemType, RenderItemFormSidebarCtx } from "datocms-plugin-sdk";
 import { render } from "./utils/render";
 import ConfigScreen from "./entrypoints/configScreen/ConfigScreen";
 import "datocms-react-ui/styles.css";
@@ -34,7 +34,7 @@ connect({
     return true;
   },
 
-  overrideFieldExtensions(field: Field, ctx: FieldIntentCtx) {
+  overrideFieldExtensions(field: Field, ctx: any) {
     if (field.attributes.api_key === MARKETING_FORM_CAMPAIGN) {
       return {
         editor: { id: CAMPAIGN_FIELD_ID },
@@ -49,7 +49,7 @@ connect({
     }
   },
 
-  mainNavigationTabs(ctx: IntentCtx) {
+  mainNavigationTabs(ctx: any) {
     return [
       {
         label: "Forms",
@@ -68,7 +68,7 @@ connect({
     }
   },
 
-  itemFormSidebars(model: ItemType, ctx: IntentCtx) {
+  itemFormSidebars(model: ItemType, ctx: any) {
     return [
       {
         id: "sideBySidePreview",

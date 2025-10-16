@@ -75,7 +75,7 @@ const PreviewSidebar = ({ ctx }: { ctx: RenderItemFormSidebarCtx }) => {
             transform: `scale(${100 / zoom})`,
             transformOrigin: "top left",
           }}
-          src={getUrl()}
+          src={getUrl() || undefined}
           ref={iframe}
         />
       </div>
