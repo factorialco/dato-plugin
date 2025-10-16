@@ -27,7 +27,7 @@ This plugin adds the following functionality.
 - Adds a "Forms" tab to the Top Menu that can be used to access "Form related" tools.
   - The first tool `Campaign Search` allows users to search `Lead Generation Form` Models that contain a specific `marketing_form_campaign` value.
   - The second tool `Issue Scanner`, goes through all the `Lead Generation Form` Models checking for some common issues.
-- Adds a small validation when modifying a `marketing_form_campaign` field to try to avoid invalid values.
+- Adds a small validation when modifying a `marketing_form_campaign` field to try to avoid invalid values. 
 
 The plugin can be easily extended to further tailor to the Factorial needs.
 
