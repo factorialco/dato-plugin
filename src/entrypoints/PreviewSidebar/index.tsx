@@ -27,7 +27,13 @@ const PreviewSidebar = ({ ctx }: { ctx: RenderItemFormSidebarCtx }) => {
       lang: ctx.locale.replace("-", "_"),
     }).toString();
 
-    return `https://factorialhr.com/cms/preview/${typename}?${queryParams}`;
+    const baseUrl = process.env.REACT_APP_PREVIEW_BASE_URL;
+
+    if (!baseUrl) {
+      return null;
+    }
+
+    return `${baseUrl}/${typename}?${queryParams}`;
   };
 
   return (
