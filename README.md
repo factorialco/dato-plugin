@@ -10,28 +10,13 @@ A custom DatoCMS plugin that provides form management and validation tools.
 yarn
 ```
 
-2 - Copy environment variables
+2 - Configure your environment variables in `.env` file by using `.env.example`
 
-```bash
-cp .env.example .env
-```
-
-3 - Configure your environment variables in `.env` file
-
-4 - Run the server
+3 - Run the server
 
 ```
 yarn run start
 ```
-
-## Env
-
-```
-REACT_APP_VALIDATE_ENDPOINT -> /api/form_campaign/validate (webpage)
-
-REACT_APP_VALIDATE_BATCH_ENDPOINT -> /api/form_campaign/validate-batch (webpage)
-```
-
 
 ## Description
 
