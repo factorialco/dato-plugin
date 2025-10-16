@@ -6,14 +6,32 @@ import { MarketingFormCampaignField } from "./entrypoints/campaignField/Campaign
 import { FormsPage } from "./entrypoints/formsPage/FormsPage";
 import { MARKETING_FORM_CAMPAIGN } from "./constants/marketingFormCampaign";
 import PreviewSidebar from "./entrypoints/PreviewSidebar";
+import { handleDemoLandingPageCreation } from "./entrypoints/demoLandingPageAlert/demoLandingPageAlert.utils";
 
 const FORMS_PAGE_ID = "forms";
 const CAMPAIGN_FIELD_ID = "marketingFormCampaign";
 const PREVIEW_SIDEBAR_ID = "sideBySidePreview";
 
+const DEMO_LANDING_PAGE_MODEL_ID = "evL8wHUkSgqfKeJxwaYKxA";
+
 connect({
   renderConfigScreen(ctx) {
     return render(<ConfigScreen ctx={ctx} />);
+  },
+
+  async onBeforeItemsPublish(items, ctx) {
+    for (const item of items) {
+      const modelId = item.relationships.item_type.data.id;
+
+      if (modelId === DEMO_LANDING_PAGE_MODEL_ID) {
+        const canCreate = await handleDemoLandingPageCreation(ctx, item);
+
+        if (!canCreate) {
+          return true; // For now, allow the save to proceed
+        }
+      }
+    }
+    return true;
   },
 
   overrideFieldExtensions(field: Field, ctx: FieldIntentCtx) {

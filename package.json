@@ -45,7 +45,7 @@
     "cross-env": "^7.0.3"
   },
   "datoCmsPlugin": {
-    "title": "",
+    "title": "Factorial Dato Plugin",
     "previewImage": "",
     "coverImage": "",
     "entryPoint": "build/index.html"
