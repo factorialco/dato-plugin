@@ -1,4 +1,4 @@
-import { RenderPagePropertiesAndMethods } from "datocms-plugin-sdk";
+import { RenderPageCtx } from "datocms-plugin-sdk";
 import { useMemo, useState } from "react";
 import { buildClient } from "@datocms/cma-client-browser";
 import {
@@ -22,7 +22,7 @@ const TOOL_OPTIONS: ToolOption[] = [
 ];
 
 export type FormsPageProps = {
-  ctx: RenderPagePropertiesAndMethods;
+  ctx: RenderPageCtx;
 };
 
 export const FormsPage = ({ ctx }: FormsPageProps) => {

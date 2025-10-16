@@ -1,4 +1,4 @@
-import { RenderPagePropertiesAndMethods } from "datocms-plugin-sdk";
+import { RenderPageCtx } from "datocms-plugin-sdk";
 
 export type ClassifiedFormBlocks = Record<
   string,
@@ -17,7 +17,7 @@ export type CustomFunction = (
 ) => Promise<ResultItem[]>;
 
 export type CommonToolProps = {
-  ctx: RenderPagePropertiesAndMethods;
+  ctx: RenderPageCtx;
   isLoading: boolean;
   onSubmit: (customFunction: CustomFunction) => void;
 };
