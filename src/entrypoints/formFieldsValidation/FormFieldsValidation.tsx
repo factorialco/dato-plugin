@@ -114,7 +114,7 @@ export const FormFieldsValidation = ({ ctx }: Props) => {
         </div>
       ) : (
         <>
-          <div style={{ ...validationStyles.container, color: "#6c757d", backgroundColor: "transparent", border: "none", padding: "8px 12px 0" }}>
+          <div style={{ ...validationStyles.container, color: "#6c757d", backgroundColor: "transparent", border: "none", padding: "8px 12px 0 0" }}>
             Please fix this before saving:
           </div>
           {validationState.validationErrors.map((error, index) => (
