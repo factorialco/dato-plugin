@@ -44,6 +44,17 @@ const validationStyles = {
   },
 };
 
+const renderErrorWithBold = (error: string) => {
+  const parts = error.split(/(duplicated fields|required fields)/i);
+  return parts.map((part, index) => {
+    const lowerPart = part.toLowerCase();
+    if (lowerPart === "duplicated fields" || lowerPart === "required fields") {
+      return <strong key={index}>{part}</strong>;
+    }
+    return <span key={index}>{part}</span>;
+  });
+};
+
 export const FormFieldsValidation = ({ ctx }: Props) => {
   const [validationState, setValidationState] = useState<ValidationState>({
     isValid: null,
@@ -102,11 +113,16 @@ export const FormFieldsValidation = ({ ctx }: Props) => {
           ✅ This form is valid
         </div>
       ) : (
-        validationState.validationErrors.map((error, index) => (
-          <div key={index} style={{ ...validationStyles.container, ...validationStyles.error }}>
-            <div><span style={{ marginRight: "8px" }}>❌</span> {error}</div>
+        <>
+          <div style={{ ...validationStyles.container, color: "#6c757d", backgroundColor: "transparent", border: "none", padding: "8px 12px 0" }}>
+            Please fix this before saving:
           </div>
-        ))
+          {validationState.validationErrors.map((error, index) => (
+            <div key={index} style={{ ...validationStyles.container, ...validationStyles.error }}>
+              <div><span style={{ marginRight: "8px" }}>❌</span> {renderErrorWithBold(error)}</div>
+            </div>
+          ))}
+        </>
       )}
     </Canvas>
   );

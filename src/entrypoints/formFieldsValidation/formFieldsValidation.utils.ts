@@ -16,18 +16,18 @@ export const checkFormFieldsValidation = async (
 
     const duplicateCheck = checkDuplicateFieldTypes(formFieldTypes);
     if (duplicateCheck.hasDuplicates) {
-      validationErrors.push(`Please remove duplicated fields --> ${duplicateCheck.duplicatedTypes.join(", ")}`);
+      validationErrors.push(`Remove duplicated fields - ${duplicateCheck.duplicatedTypes.join(", ")}`);
     }
 
     if (formFieldTypes.length === 0) {
-      validationErrors.push(`Please include missing required fields --> ${REQUIRED_FIELD_TYPES.join(", ")}`);
+      validationErrors.push(`Include missing required fields - ${REQUIRED_FIELD_TYPES.join(", ")}`);
     } else {
       const missingFields = REQUIRED_FIELD_TYPES.filter(
         (requiredType) => !formFieldTypes.includes(requiredType)
       );
 
       if (missingFields.length > 0) {
-        validationErrors.push(`Please include required fields --> ${missingFields.join(", ")}`);
+        validationErrors.push(`Include required fields - ${missingFields.join(", ")}`);
       }
     }
 
