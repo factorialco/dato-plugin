@@ -2,8 +2,7 @@
  * Required field types that must be present in the form
  * Add or remove field types from this array to configure validation
  */
-export const REQUIRED_FIELD_TYPES: string[] = ["email", "phone"];
-
+export const REQUIRED_FIELD_TYPES_OBJECT = {"contact_email": "Email", "company_phone": "Phone", "contact_first_name": "First Name", "contact_last_name": "Last Name", "consent": "Consent Text", "company_form_number_of_employees": "Number of Employees"};
 /**
  * Checks form_fields validation and returns the result
  * Returns validation state without showing alerts
@@ -20,14 +19,16 @@ export const checkFormFieldsValidation = async (
     }
 
     if (formFieldTypes.length === 0) {
-      validationErrors.push(`Include missing required fields - ${REQUIRED_FIELD_TYPES.join(", ")}`);
+      validationErrors.push(
+        `Include missing required fields - ${Object.values(REQUIRED_FIELD_TYPES_OBJECT).join(", ")}`
+      );
     } else {
-      const missingFields = REQUIRED_FIELD_TYPES.filter(
+      const missingFields = Object.keys(REQUIRED_FIELD_TYPES_OBJECT).filter(
         (requiredType) => !formFieldTypes.includes(requiredType)
       );
 
       if (missingFields.length > 0) {
-        validationErrors.push(`Include required fields - ${missingFields.join(", ")}`);
+        validationErrors.push(`Include required fields - ${missingFields.map((field) => REQUIRED_FIELD_TYPES_OBJECT[field as keyof typeof REQUIRED_FIELD_TYPES_OBJECT]).join(", ")}`);
       }
     }
 
