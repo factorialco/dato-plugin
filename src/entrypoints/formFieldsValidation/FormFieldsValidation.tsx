@@ -63,8 +63,9 @@ export const FormFieldsValidation = ({ ctx }: Props) => {
   });
 
   const currentFieldTypes = useMemo(() => {
-    const fieldTypeObjects = get(ctx.formValues, ctx.fieldPath)
-    return (fieldTypeObjects as any[]).map((field: any) => field.field_type);
+    const formFieldsContent = get(ctx.formValues, ctx.fieldPath) as any[];
+    const fieldTypeObjects = formFieldsContent.filter((field: any) => field.field_type && field.field_type !== "divider");
+    return fieldTypeObjects.map((field: any) => field.field_type);
   }, [ctx.formValues, ctx.fieldPath]);
 
   useEffect(() => {
