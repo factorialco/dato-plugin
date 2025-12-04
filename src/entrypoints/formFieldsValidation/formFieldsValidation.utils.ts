@@ -2,7 +2,17 @@
  * Required field types that must be present in the form
  * Add or remove field types from this array to configure validation
  */
-export const REQUIRED_FIELD_TYPES_OBJECT = {"contact_email": "Email", "company_phone": "Phone", "contact_first_name": "First Name", "contact_last_name": "Last Name", "consent": "Consent Text", "company_form_number_of_employees": "Number of Employees"};
+export const REQUIRED_FIELD_TYPES_OBJECT = {
+  "contact_email": "Email",
+  "contact_first_name": "First Name",
+  "contact_last_name": "Last Name",
+  "company_phone": "Phone",
+  "company_name": "Company Name",
+  "company_form_number_of_employees": "Number of Employees",
+  "contact_jobtitle": "Job Title",
+  "consent": "Consent Text",
+};
+
 /**
  * Checks form_fields validation and returns the result
  * Returns validation state without showing alerts
