@@ -9,7 +9,7 @@ export const REQUIRED_FIELD_TYPES_OBJECT = {
   "company_phone": "Phone",
   "company_name": "Company Name",
   "company_form_number_of_employees": "Number of Employees",
-  "contact_jobtitle": "Job Title",
+  "company_jobtitle": "Job Title",
   "consent": "Consent Text",
 };
 
