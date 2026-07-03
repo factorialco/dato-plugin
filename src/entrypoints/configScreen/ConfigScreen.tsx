@@ -44,6 +44,7 @@ const combineToIso = (date: string, time: string): string => {
 
 export default function ConfigScreen({ ctx }: Props) {
   const parameters = ctx.plugin.attributes.parameters as Parameters;
+  const [isSaving, setIsSaving] = useState(false);
   const [currentAuth, setCurrentAuth] = useState(parameters.authorization);
   const [maintenanceEnabled, setMaintenanceEnabled] = useState(
     parameters.maintenanceEnabled ?? false
@@ -64,7 +65,7 @@ export default function ConfigScreen({ ctx }: Props) {
     (parameters.maintenanceMessage ?? "") !== maintenanceMessage ||
     (parameters.maintenanceStartsAt ?? "") !== maintenanceStartsAt;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (maintenanceEnabled && !isValidMaintenanceWindow(maintenanceMessage, maintenanceStartsAt)) {
       ctx.alert(
         "To enable the maintenance banner, fill in the message and a valid start date/time."
@@ -72,14 +73,29 @@ export default function ConfigScreen({ ctx }: Props) {
       return;
     }
 
-    ctx.updatePluginParameters({
-      ...parameters,
-      authorization: currentAuth,
-      maintenanceEnabled,
-      maintenanceMessage,
-      maintenanceStartsAt,
-    });
-    ctx.notice("Settings updated successfully!");
+    setIsSaving(true);
+
+    try {
+      // Awaited on purpose: without this, the success notice could appear
+      // before the save actually reached DatoCMS's backend, so a quick
+      // reload right after (a very natural thing to do right after seeing
+      // "success") could abort the in-flight request and silently lose the
+      // change — exactly what happened before this fix existed.
+      await ctx.updatePluginParameters({
+        ...parameters,
+        authorization: currentAuth,
+        maintenanceEnabled,
+        maintenanceMessage,
+        maintenanceStartsAt,
+      });
+      ctx.notice("Settings updated successfully!");
+    } catch (error) {
+      ctx.alert(
+        `Could not save the settings: ${error instanceof Error ? error.message : String(error)}`
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -136,8 +152,8 @@ export default function ConfigScreen({ ctx }: Props) {
           </div>
         </div>
 
-        <Button disabled={!hasChanges} onClick={handleSave}>
-          Save config
+        <Button disabled={!hasChanges || isSaving} onClick={handleSave}>
+          {isSaving ? "Saving…" : "Save config"}
         </Button>
       </div>
     </Canvas>
