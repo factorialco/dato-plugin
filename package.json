@@ -41,7 +41,6 @@
     ]
   },
   "devDependencies": {
-    "@types/jest": "^27.5.2",
     "@types/lodash-es": "^4.17.6",
     "cross-env": "^7.0.3"
   },
