@@ -8,11 +8,8 @@ import { MARKETING_FORM_CAMPAIGN } from "./constants/marketingFormCampaign";
 import PreviewSidebar from "./entrypoints/PreviewSidebar";
 import { handleDemoLandingPageCreation } from "./entrypoints/demoLandingPageAlert/demoLandingPageAlert.utils";
 import { FormFieldsValidation } from "./entrypoints/formFieldsValidation/FormFieldsValidation";
-import { handleMaintenanceBannerBoot } from "./entrypoints/maintenanceBanner/maintenanceBanner";
-import { MaintenancePage } from "./entrypoints/maintenanceBanner/MaintenancePage";
 
 const FORMS_PAGE_ID = "forms";
-const MAINTENANCE_PAGE_ID = "maintenance";
 const CAMPAIGN_FIELD_ID = "marketingFormCampaign";
 const FORM_FIELDS_VALIDATION_ID = "formFieldsValidation";
 const PREVIEW_SIDEBAR_ID = "sideBySidePreview";
@@ -26,11 +23,7 @@ connect({
     return render(<ConfigScreen ctx={ctx} />);
   },
 
-  onBoot(ctx) {
-    return handleMaintenanceBannerBoot(ctx);
-  },
-
-  async onBeforeItemsPublish(items, ctx) {
+  async onBeforeItemsPublish(items, ctx) {    
     for (const item of items) {
       const modelId = item.relationships.item_type.data.id;
 
@@ -75,29 +68,12 @@ connect({
   },
 
   mainNavigationTabs(ctx: any) {
-    // `onBoot` only fires once when the plugin's JS boots (full page load),
-    // not on DatoCMS's internal SPA navigation, so a user who never
-    // hard-reloads could miss the maintenance notice entirely. This hook is
-    // re-invoked by the host on navigation, so we piggyback on it as a
-    // second trigger — not its documented purpose, but tested and harmless
-    // (handleMaintenanceBannerBoot no-ops once already shown/dismissed).
-    // If DatoCMS changes how often this hook is called, this may need
-    // revisiting.
-    handleMaintenanceBannerBoot(ctx).catch(() => {});
-
     return [
       {
         label: "Forms",
         icon: "toolbox",
         pointsTo: {
           pageId: FORMS_PAGE_ID,
-        },
-      },
-      {
-        label: "Maintenance",
-        icon: "triangle-exclamation",
-        pointsTo: {
-          pageId: MAINTENANCE_PAGE_ID,
         },
       },
     ];
@@ -107,8 +83,6 @@ connect({
     switch (pageId) {
       case FORMS_PAGE_ID:
         return render(<FormsPage ctx={ctx} />);
-      case MAINTENANCE_PAGE_ID:
-        return render(<MaintenancePage ctx={ctx} />);
     }
   },
 
