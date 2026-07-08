@@ -60,7 +60,8 @@ const PreviewSidebar = ({ ctx }: { ctx: RenderItemFormSidebarCtx }) => {
             buttonSize="xxs"
             onClick={() => {
               if (iframe.current) {
-                iframe.current.src = iframe.current.src;
+                const { src } = iframe.current;
+                iframe.current.src = src;
               }
             }}
           >
@@ -68,6 +69,7 @@ const PreviewSidebar = ({ ctx }: { ctx: RenderItemFormSidebarCtx }) => {
           </Button>
         </div>
         <iframe
+          title="Live preview"
           width={`${zoom}%`}
           height={`${zoom}%`}
           style={{
