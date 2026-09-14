@@ -6,7 +6,6 @@
   "packageManager": "pnpm@10.33.0",
   "dependencies": {
     "@datocms/cma-client-browser": "^5.1.26",
-    "axios": "^0.27.2",
     "datocms-plugin-sdk": "^2.0.15",
     "datocms-react-ui": "^2.0.15",
     "lodash-es": "^4.17.21",
