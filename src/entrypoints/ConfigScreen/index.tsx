@@ -132,6 +132,25 @@ const ConfigScreen = ({ ctx }: Props) => {
             textInputProps={{ disabled: !canEdit }}
           />
 
+          <TextField
+            id='searchReplaceAllowedRoleIds'
+            name='searchReplaceAllowedRoleIds'
+            label='Search & Replace roles'
+            hint='Comma-separated role IDs allowed to use Search & Replace. Leave empty for every role. Anyone who can edit the schema keeps access either way, so the admins who own this setting cannot be locked out. This hides the tool — it does not restrict the API, which is what DatoCMS role permissions are for.'
+            placeholder='Every role'
+            value={values.searchReplaceAllowedRoleIds.join(', ')}
+            onChange={(value) =>
+              setValues((current) => ({
+                ...current,
+                searchReplaceAllowedRoleIds: value
+                  .split(',')
+                  .map((part) => part.trim())
+                  .filter((part) => part !== '')
+              }))
+            }
+            textInputProps={{ disabled: !canEdit }}
+          />
+
           <SwitchField
             id='enforceDemoLandingPageLimit'
             name='enforceDemoLandingPageLimit'
