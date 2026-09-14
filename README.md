@@ -23,12 +23,18 @@ No `.env` file is needed: the plugin is configured from its settings screen insi
 ## Other commands
 
 ```
-pnpm build       # typecheck + production build into build/
-pnpm preview     # serve the production build locally
-pnpm test        # run the Vitest suite once
-pnpm test:watch  # run Vitest in watch mode
-pnpm typecheck   # tsc --noEmit
+pnpm build         # typecheck + production build into build/
+pnpm preview       # serve the production build locally
+pnpm test          # run the Vitest suite once
+pnpm test:watch    # run Vitest in watch mode
+pnpm typecheck     # tsc --noEmit
+pnpm lint          # oxlint
+pnpm lint:fix      # oxlint --fix
+pnpm format        # oxfmt
+pnpm format:check  # oxfmt --check
 ```
+
+Linting and formatting use [oxlint](https://oxc.rs/) and [oxfmt](https://oxc.rs/) with the [Ultracite](https://www.ultracite.ai/) presets, matching the Factorial webpage. `oxlint.config.mjs` extends `core` + `react` + `vitest`; the webpage's `next` preset does not apply here. All of the above run in CI on every pull request.
 
 ## Configuration
 
@@ -36,7 +42,8 @@ Settings live on the plugin's own details page in DatoCMS (Settings → Plugins 
 
 | Setting | Purpose |
 | --- | --- |
-| Live preview base URL | Front-end that renders the "Live preview" sidebar. Empty (the default) hides the preview. |
+| Live preview base URL | Front-end that renders the "Live preview" sidebar. Empty (the default) hides the sidebar entirely. |
+| Live preview models | Comma-separated model API keys to offer the preview on. Empty means every model. |
 | Demo landing page model ID | Model whose published control/variant pages are checked against the limit. |
 | Form template model ID | Model that gets the form fields validation addon. |
 | Form fields field API key | Field on that model the addon attaches to. |

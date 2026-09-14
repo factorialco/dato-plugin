@@ -20,6 +20,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "lint": "oxlint -c oxlint.config.mjs",
+    "lint:fix": "oxlint -c oxlint.config.mjs --fix",
+    "lint:ci": "oxlint -c oxlint.config.mjs --quiet",
+    "format": "oxfmt src vite.config.ts oxlint.config.mjs",
+    "format:check": "oxfmt --check src vite.config.ts oxlint.config.mjs",
     "prepublishOnly": "pnpm run build"
   },
   "devDependencies": {
@@ -29,7 +34,10 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "jsdom": "^25.0.1",
+    "oxfmt": "0.65.0",
+    "oxlint": "1.80.0",
     "typescript": "^7.0.2",
+    "ultracite": "7.10.7",
     "vite": "^6.0.5",
     "vitest": "^3.2.7"
   },
