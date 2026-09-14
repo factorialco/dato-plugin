@@ -4,18 +4,30 @@ A custom DatoCMS plugin that provides form management and validation tools.
 
 ## How to run this repo locally
 
-1 - Install yarn dependencies
+This project uses [pnpm](https://pnpm.io/), [Vite](https://vite.dev/) and [Vitest](https://vitest.dev/).
+
+1 - Install dependencies
 
 ```
-yarn
+pnpm install
 ```
 
-2 - Configure your environment variables in `.env` file by using `.env.example`
+2 - Configure your environment variables in `.env` file by using `.env.example`. Only variables prefixed with `VITE_` are exposed to the app.
 
-3 - Run the server
+3 - Run the dev server (http://localhost:3000)
 
 ```
-yarn run start
+pnpm start
+```
+
+## Other commands
+
+```
+pnpm build       # typecheck + production build into build/
+pnpm preview     # serve the production build locally
+pnpm test        # run the Vitest suite once
+pnpm test:watch  # run Vitest in watch mode
+pnpm typecheck   # tsc --noEmit
 ```
 
 ## Description

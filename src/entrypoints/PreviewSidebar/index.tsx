@@ -27,7 +27,7 @@ const PreviewSidebar = ({ ctx }: { ctx: RenderItemFormSidebarCtx }) => {
       lang: ctx.locale.replace("-", "_"),
     }).toString();
 
-    const baseUrl = process.env.REACT_APP_PREVIEW_BASE_URL;
+    const baseUrl = import.meta.env.VITE_PREVIEW_BASE_URL;
 
     if (!baseUrl) {
       return null;
