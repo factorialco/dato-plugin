@@ -21,20 +21,27 @@ connect({
   },
 
   async onBeforeItemsPublish(items, ctx) {
-    const { demoLandingPageModelId } = readParameters(ctx);
+    const { demoLandingPageModelId, enforceDemoLandingPageLimit } =
+      readParameters(ctx);
 
+    let withinLimit = true;
+
+    // Every item is checked, so a bulk publish surfaces all the offenders
+    // rather than stopping at the first one.
     for (const item of items) {
       const modelId = item.relationships.item_type.data.id;
 
       if (modelId === demoLandingPageModelId) {
-        const canCreate = await handleDemoLandingPageCreation(ctx, item);
+        const result = await handleDemoLandingPageCreation(ctx, item);
 
-        if (!canCreate) {
-          return true; // For now, allow the save to proceed
+        if (!result.withinLimit) {
+          withinLimit = false;
         }
       }
     }
-    return true;
+
+    // Warn-only until an admin turns enforcement on from the config screen.
+    return withinLimit || !enforceDemoLandingPageLimit;
   },
 
   overrideFieldExtensions(field: Field, ctx: any) {

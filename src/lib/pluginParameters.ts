@@ -13,6 +13,11 @@ export type PluginParameters = {
   formTemplateModelId: string;
   /** API key of the field on that model to attach the addon to. */
   formFieldsBlockApiKey: string;
+  /**
+   * When true, exceeding the demo landing page limit blocks publishing.
+   * When false (the default) the editor is only warned.
+   */
+  enforceDemoLandingPageLimit: boolean;
 };
 
 /**
@@ -24,6 +29,10 @@ export const DEFAULT_PARAMETERS: PluginParameters = {
   demoLandingPageModelId: "evL8wHUkSgqfKeJxwaYKxA",
   formTemplateModelId: "BZRowM-YRc66pOcGqLT9ng",
   formFieldsBlockApiKey: "form_fields",
+  // Warn-only by default: this check could never run before the plugin
+  // declared the currentUserAccessToken permission, so blocking must be
+  // turned on deliberately once the warnings look right.
+  enforceDemoLandingPageLimit: false,
 };
 
 const asString = (value: unknown, fallback: string): string =>
@@ -52,6 +61,10 @@ export const normalizeParameters = (
     raw?.formFieldsBlockApiKey,
     DEFAULT_PARAMETERS.formFieldsBlockApiKey
   ),
+  enforceDemoLandingPageLimit:
+    typeof raw?.enforceDemoLandingPageLimit === "boolean"
+      ? raw.enforceDemoLandingPageLimit
+      : DEFAULT_PARAMETERS.enforceDemoLandingPageLimit,
 });
 
 /** Reads the normalized parameters off any hook's `ctx`. */

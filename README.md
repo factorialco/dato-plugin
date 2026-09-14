@@ -40,8 +40,24 @@ Settings live on the plugin's own details page in DatoCMS (Settings → Plugins 
 | Demo landing page model ID | Model whose published control/variant pages are checked against the limit. |
 | Form template model ID | Model that gets the form fields validation addon. |
 | Form fields field API key | Field on that model the addon attaches to. |
+| Block publishing when the demo landing page limit is exceeded | Off (default): editors are only warned. On: publishing is refused. |
 
 Every setting except the preview URL falls back to the value the plugin previously hardcoded, so an existing installation keeps working until someone saves the config screen.
+
+### Permissions
+
+The plugin declares the [`currentUserAccessToken`](https://www.datocms.com/docs/plugin-sdk/additional-permissions) permission, which it needs to read existing demo landing pages through the Content Management API.
+
+Because this is a **private** plugin, declaring it in `package.json` is not enough — the permission also has to be granted for the installed plugin from the DatoCMS interface. Without it the limit check cannot run: the plugin warns the editor and lets the record through rather than blocking on a check it could not perform.
+
+### Rolling out the demo landing page limit
+
+The limit check could never run before the plugin declared the permission above, so it starts enforcing against content that has never been constrained by it. Turn it on in two steps:
+
+1. Grant the permission and leave the enforcement switch **off**. Editors get a warning when a publish would exceed the limit, and nothing is blocked.
+2. Once the warnings look right, turn the switch **on** to refuse those publishes. No redeploy needed — it is a plugin parameter.
+
+The plugin always fails open: if the limit cannot be verified (permission missing, API error) the record is published with a warning. Publishing is only ever refused on a confirmed violation.
 
 ## Description
 

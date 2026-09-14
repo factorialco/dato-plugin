@@ -1,6 +1,13 @@
 import { useState } from "react";
 import type { RenderConfigScreenCtx } from "datocms-plugin-sdk";
-import { Button, Canvas, FieldGroup, Form, TextField } from "datocms-react-ui";
+import {
+  Button,
+  Canvas,
+  FieldGroup,
+  Form,
+  SwitchField,
+  TextField,
+} from "datocms-react-ui";
 import {
   DEFAULT_PARAMETERS,
   PluginParameters,
@@ -35,8 +42,10 @@ const ConfigScreen = ({ ctx }: Props) => {
     ? undefined
     : "Enter a full URL, e.g. https://example.com";
 
-  const setValue = (key: keyof PluginParameters) => (value: string) =>
-    setValues((current) => ({ ...current, [key]: value }));
+  const setValue =
+    <K extends keyof PluginParameters>(key: K) =>
+    (value: PluginParameters[K]) =>
+      setValues((current) => ({ ...current, [key]: value }));
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -105,6 +114,21 @@ const ConfigScreen = ({ ctx }: Props) => {
             value={values.formFieldsBlockApiKey}
             onChange={setValue("formFieldsBlockApiKey")}
             textInputProps={{ disabled: !canEdit }}
+          />
+
+          <SwitchField
+            id="enforceDemoLandingPageLimit"
+            name="enforceDemoLandingPageLimit"
+            label="Block publishing when the demo landing page limit is exceeded"
+            hint="Off: editors are only warned. On: publishing is refused. The plugin always lets the record through if the limit cannot be verified."
+            value={values.enforceDemoLandingPageLimit}
+            onChange={setValue("enforceDemoLandingPageLimit")}
+            // SwitchInputProps is not partial, so name/value must be repeated.
+            switchInputProps={{
+              name: "enforceDemoLandingPageLimit",
+              value: values.enforceDemoLandingPageLimit,
+              disabled: !canEdit,
+            }}
           />
         </FieldGroup>
 

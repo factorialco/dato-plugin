@@ -51,3 +51,23 @@ describe("readParameters", () => {
     expect(readParameters(ctx).previewBaseUrl).toBe("https://a.dev");
   });
 });
+
+describe("enforceDemoLandingPageLimit", () => {
+  it("defaults to warn-only", () => {
+    expect(normalizeParameters({}).enforceDemoLandingPageLimit).toBe(false);
+  });
+
+  it("is honoured when explicitly enabled", () => {
+    expect(
+      normalizeParameters({ enforceDemoLandingPageLimit: true })
+        .enforceDemoLandingPageLimit
+    ).toBe(true);
+  });
+
+  it("ignores non-boolean values", () => {
+    expect(
+      normalizeParameters({ enforceDemoLandingPageLimit: "true" })
+        .enforceDemoLandingPageLimit
+    ).toBe(false);
+  });
+});

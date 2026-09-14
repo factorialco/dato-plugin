@@ -41,6 +41,9 @@
   },
   "datoCmsPlugin": {
     "title": "Factorial Dato Plugin",
+    "permissions": [
+      "currentUserAccessToken"
+    ],
     "previewImage": "",
     "coverImage": "",
     "entryPoint": "build/index.html"
