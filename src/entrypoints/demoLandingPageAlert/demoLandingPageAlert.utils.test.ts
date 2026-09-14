@@ -1,60 +1,60 @@
-import { describe, expect, it } from "vitest";
-import { checkDemoLandingPageLimits } from "./demoLandingPageAlert.utils";
+import { describe, expect, it } from 'vitest'
+import { checkDemoLandingPageLimits } from './demoLandingPageAlert.utils'
 
-const instance = (variant: string, id = "current") => ({
+const instance = (variant: string, id = 'current') => ({
   id,
-  attributes: { variant },
-});
+  attributes: { variant }
+})
 
-describe("checkDemoLandingPageLimits", () => {
-  it("allows the first control and the first variant", () => {
+describe(checkDemoLandingPageLimits, () => {
+  it('allows the first control and the first variant', () => {
     expect(
-      checkDemoLandingPageLimits([{ variant: "control" }], instance("variant"))
-    ).toEqual({ canCreate: true });
-  });
+      checkDemoLandingPageLimits([{ variant: 'control' }], instance('variant'))
+    ).toStrictEqual({ canCreate: true })
+  })
 
-  it("blocks a second control page", () => {
+  it('blocks a second control page', () => {
     const result = checkDemoLandingPageLimits(
-      [{ variant: "control" }],
-      instance("control")
-    );
+      [{ variant: 'control' }],
+      instance('control')
+    )
 
-    expect(result.canCreate).toBe(false);
-    expect(result.message).toContain("Control pages: 2 (max 1).");
-  });
+    expect(result.canCreate).toBeFalsy()
+    expect(result.message).toContain('Control pages: 2 (max 1).')
+  })
 
-  it("blocks a second variant page", () => {
+  it('blocks a second variant page', () => {
     const result = checkDemoLandingPageLimits(
-      [{ variant: "variant" }],
-      instance("variant")
-    );
+      [{ variant: 'variant' }],
+      instance('variant')
+    )
 
-    expect(result.canCreate).toBe(false);
-    expect(result.message).toContain("Variant pages: 2 (max 1).");
-  });
+    expect(result.canCreate).toBeFalsy()
+    expect(result.message).toContain('Variant pages: 2 (max 1).')
+  })
 
-  it("allows publishing when nothing exists yet", () => {
-    expect(checkDemoLandingPageLimits([])).toEqual({ canCreate: true });
-  });
+  it('allows publishing when nothing exists yet', () => {
+    expect(checkDemoLandingPageLimits([])).toStrictEqual({ canCreate: true })
+  })
 
-  it("does not count an already-published record twice when re-published", () => {
+  it('does not count an already-published record twice when re-published', () => {
     // The record being published is already in the published list. Counting
     // it again would report 2 control pages and block a plain re-publish.
     expect(
       checkDemoLandingPageLimits(
-        [{ id: "abc", variant: "control" }],
-        instance("control", "abc")
+        [{ id: 'abc', variant: 'control' }],
+        instance('control', 'abc')
       )
-    ).toEqual({ canCreate: true });
-  });
+    ).toStrictEqual({ canCreate: true })
+  })
 
-  it("still blocks when a different record already holds the slot", () => {
+  it('still blocks when a different record already holds the slot', () => {
     const result = checkDemoLandingPageLimits(
-      [{ id: "abc", variant: "control" }],
-      instance("control", "xyz")
-    );
+      [{ id: 'abc', variant: 'control' }],
+      instance('control', 'xyz')
+    )
 
-    expect(result.canCreate).toBe(false);
-    expect(result.message).toContain("Control pages: 2 (max 1).");
-  });
-});
+    expect(result.canCreate).toBeFalsy()
+    expect(result.message).toContain('Control pages: 2 (max 1).')
+  })
+})

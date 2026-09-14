@@ -1,22 +1,22 @@
-import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react";
+import { defineConfig } from 'vitest/config'
+import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
   // DatoCMS serves the plugin from a nested path, so assets must be relative.
-  base: "./",
+  base: './',
   build: {
     // Kept as `build` so `datoCmsPlugin.entryPoint` stays valid.
-    outDir: "build",
+    outDir: 'build'
   },
   server: {
     port: 3000,
-    open: false,
+    open: false
   },
   test: {
-    environment: "jsdom",
+    environment: 'jsdom',
     globals: true,
-    include: ["src/**/*.{test,spec}.{ts,tsx}"],
-  },
-});
+    include: ['src/**/*.{test,spec}.{ts,tsx}']
+  }
+})

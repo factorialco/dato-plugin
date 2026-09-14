@@ -1,68 +1,68 @@
-import { RenderItemFormSidebarCtx } from "datocms-plugin-sdk";
-import { useRef, useState } from "react";
-import { Button, Canvas } from "datocms-react-ui";
-import { readParameters } from "../../lib/pluginParameters";
+import type { RenderItemFormSidebarCtx } from 'datocms-plugin-sdk'
+import { useRef, useState } from 'react'
+import { Button, Canvas } from 'datocms-react-ui'
+import { readParameters } from '../../lib/pluginParameters'
 
 const PreviewSidebar = ({ ctx }: { ctx: RenderItemFormSidebarCtx }) => {
-  const itemId = ctx.item?.relationships.item_type.data.id as string;
-  const typename = ctx.itemTypes?.[itemId]?.attributes.api_key.replace(
+  const itemId = ctx.item?.relationships.item_type.data.id as string
+  const typename = ctx.itemTypes?.[itemId]?.attributes.api_key.replaceAll(
     /(?:^|_)(.)/g,
     (_, group1) => group1.toUpperCase()
-  );
+  )
 
   const [zoom, setZoom] = useState<number>(
-    parseInt(localStorage.getItem("live-zoom") || "180")
-  );
-  const iframe = useRef<HTMLIFrameElement>(null);
+    Math.trunc(Number(localStorage.getItem('live-zoom') || '180'))
+  )
+  const iframe = useRef<HTMLIFrameElement>(null)
 
   const onChangeZoom = (increase: number) => {
-    const amount = zoom - increase;
+    const amount = zoom - increase
 
-    localStorage.setItem("live-zoom", amount.toString());
-    setZoom(amount);
-  };
+    localStorage.setItem('live-zoom', amount.toString())
+    setZoom(amount)
+  }
 
   const getUrl = () => {
     const queryParams = new URLSearchParams({
       id: ctx.item?.id as string,
-      lang: ctx.locale.replace("-", "_"),
-    }).toString();
+      lang: ctx.locale.replace('-', '_')
+    }).toString()
 
-    const { previewBaseUrl: baseUrl } = readParameters(ctx);
+    const { previewBaseUrl: baseUrl } = readParameters(ctx)
 
     if (!baseUrl) {
-      return null;
+      return null
     }
 
-    return `${baseUrl}/${typename}?${queryParams}`;
-  };
+    return `${baseUrl}/${typename}?${queryParams}`
+  }
 
   return (
     <Canvas ctx={ctx} noAutoResizer>
-      <div style={{ height: window.innerHeight, overflow: "hidden" }}>
+      <div style={{ height: window.innerHeight, overflow: 'hidden' }}>
         <div
           style={{
             padding: 10,
-            justifyContent: "flex-end",
-            display: "flex",
-            gap: "10px",
+            justifyContent: 'flex-end',
+            display: 'flex',
+            gap: '10px'
           }}
         >
-          {["-", "+"].map((e) => (
+          {['-', '+'].map((e) => (
             <Button
               key={e}
-              buttonSize="xxs"
-              onClick={() => onChangeZoom(parseInt(`${e}50`))}
+              buttonSize='xxs'
+              onClick={() => onChangeZoom(Math.trunc(Number(`${e}50`)))}
             >
               {e}
             </Button>
           ))}
           <Button
-            buttonSize="xxs"
+            buttonSize='xxs'
             onClick={() => {
               if (iframe.current) {
-                const { src } = iframe.current;
-                iframe.current.src = src;
+                const { src } = iframe.current
+                iframe.current.src = src
               }
             }}
           >
@@ -70,20 +70,20 @@ const PreviewSidebar = ({ ctx }: { ctx: RenderItemFormSidebarCtx }) => {
           </Button>
         </div>
         <iframe
-          title="Live preview"
+          title='Live preview'
           width={`${zoom}%`}
           height={`${zoom}%`}
           style={{
             border: 0,
             transform: `scale(${100 / zoom})`,
-            transformOrigin: "top left",
+            transformOrigin: 'top left'
           }}
           src={getUrl() || undefined}
           ref={iframe}
         />
       </div>
     </Canvas>
-  );
-};
+  )
+}
 
-export default PreviewSidebar;
+export default PreviewSidebar

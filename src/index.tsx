@@ -1,89 +1,112 @@
-import {
-  connect,
+import type {
   Field,
   ItemType,
-  RenderItemFormSidebarCtx,
-} from "datocms-plugin-sdk";
-import { render } from "./utils/render";
-import "datocms-react-ui/styles.css";
-import ConfigScreen from "./entrypoints/ConfigScreen";
-import PreviewSidebar from "./entrypoints/PreviewSidebar";
-import { handleDemoLandingPageCreation } from "./entrypoints/demoLandingPageAlert/demoLandingPageAlert.utils";
-import { FormFieldsValidation } from "./entrypoints/formFieldsValidation/FormFieldsValidation";
-import { readParameters } from "./lib/pluginParameters";
+  RenderItemFormSidebarCtx
+} from 'datocms-plugin-sdk'
+import { connect } from 'datocms-plugin-sdk'
+import { render } from './utils/render'
+import 'datocms-react-ui/styles.css'
+import ConfigScreen from './entrypoints/ConfigScreen'
+import PreviewSidebar from './entrypoints/PreviewSidebar'
+import { handleDemoLandingPageCreation } from './entrypoints/demoLandingPageAlert/demoLandingPageAlert.utils'
+import { FormFieldsValidation } from './entrypoints/formFieldsValidation/FormFieldsValidation'
+import { readParameters } from './lib/pluginParameters'
 
-const FORM_FIELDS_VALIDATION_ID = "formFieldsValidation";
-const PREVIEW_SIDEBAR_ID = "sideBySidePreview";
+const FORM_FIELDS_VALIDATION_ID = 'formFieldsValidation'
+const PREVIEW_SIDEBAR_ID = 'sideBySidePreview'
 
 connect({
   renderConfigScreen(ctx) {
-    return render(<ConfigScreen ctx={ctx} />);
+    return render(<ConfigScreen ctx={ctx} />)
   },
 
   async onBeforeItemsPublish(items, ctx) {
     const { demoLandingPageModelId, enforceDemoLandingPageLimit } =
-      readParameters(ctx);
+      readParameters(ctx)
 
-    let withinLimit = true;
+    let withinLimit = true
 
     // Every item is checked, so a bulk publish surfaces all the offenders
     // rather than stopping at the first one.
     for (const item of items) {
-      const modelId = item.relationships.item_type.data.id;
+      const modelId = item.relationships.item_type.data.id
 
       if (modelId === demoLandingPageModelId) {
-        const result = await handleDemoLandingPageCreation(ctx, item);
+        const result = await handleDemoLandingPageCreation(ctx, item)
 
         if (!result.withinLimit) {
-          withinLimit = false;
+          withinLimit = false
         }
       }
     }
 
     // Warn-only until an admin turns enforcement on from the config screen.
-    return withinLimit || !enforceDemoLandingPageLimit;
+    return withinLimit || !enforceDemoLandingPageLimit
   },
 
   overrideFieldExtensions(field: Field, ctx: any) {
-    const { formTemplateModelId, formFieldsBlockApiKey } = readParameters(ctx);
-    const modelId = ctx.itemType?.id;
+    const { formTemplateModelId, formFieldsBlockApiKey } = readParameters(ctx)
+    const modelId = ctx.itemType?.id
 
     if (
       modelId === formTemplateModelId &&
       field.attributes.api_key === formFieldsBlockApiKey
     ) {
       return {
-        addons: [{ id: FORM_FIELDS_VALIDATION_ID }],
-      };
+        addons: [{ id: FORM_FIELDS_VALIDATION_ID }]
+      }
     }
 
-    return undefined;
+    return undefined
   },
 
   renderFieldExtension(fieldExtensionId, ctx) {
     switch (fieldExtensionId) {
-      case FORM_FIELDS_VALIDATION_ID:
-        return render(<FormFieldsValidation ctx={ctx} />);
-      default:
-        return undefined;
+      case FORM_FIELDS_VALIDATION_ID: {
+        return render(<FormFieldsValidation ctx={ctx} />)
+      }
+      default: {
+        return undefined
+      }
     }
   },
 
   itemFormSidebars(model: ItemType, ctx: any) {
+    const { previewBaseUrl, previewModelApiKeys } = readParameters(ctx)
+
+    // Without a base URL the sidebar can only render an empty iframe, so do
+    // not declare it at all — it would otherwise force a blank 900px panel
+    // open on every record.
+    if (!previewBaseUrl) {
+      return []
+    }
+
+    // An empty list means "every model", preserving the previous behaviour.
+    if (
+      previewModelApiKeys.length > 0 &&
+      !previewModelApiKeys.includes(model.attributes.api_key)
+    ) {
+      return []
+    }
+
     return [
       {
         id: PREVIEW_SIDEBAR_ID,
-        label: "Live preview",
+        label: 'Live preview',
         preferredWidth: 900,
-        startOpen: true,
-      },
-    ];
+        startOpen: true
+      }
+    ]
   },
 
   renderItemFormSidebar(sidebarId, ctx: RenderItemFormSidebarCtx) {
     switch (sidebarId) {
-      case PREVIEW_SIDEBAR_ID:
-        return render(<PreviewSidebar ctx={ctx as any} />);
+      case PREVIEW_SIDEBAR_ID: {
+        return render(<PreviewSidebar ctx={ctx as any} />)
+      }
+      default: {
+        return undefined
+      }
     }
-  },
-});
+  }
+})
