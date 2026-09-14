@@ -1,0 +1,129 @@
+import { useState } from "react";
+import type { RenderConfigScreenCtx } from "datocms-plugin-sdk";
+import { Button, Canvas, FieldGroup, Form, TextField } from "datocms-react-ui";
+import {
+  DEFAULT_PARAMETERS,
+  PluginParameters,
+  readParameters,
+} from "../../lib/pluginParameters";
+
+type Props = {
+  ctx: RenderConfigScreenCtx;
+};
+
+const isValidBaseUrl = (value: string) => {
+  if (!value) {
+    return true;
+  }
+
+  try {
+    const { protocol } = new URL(value);
+    return protocol === "https:" || protocol === "http:";
+  } catch {
+    return false;
+  }
+};
+
+const ConfigScreen = ({ ctx }: Props) => {
+  const [values, setValues] = useState<PluginParameters>(() =>
+    readParameters(ctx)
+  );
+  const [saving, setSaving] = useState(false);
+
+  const canEdit = ctx.currentRole.meta.final_permissions.can_edit_schema;
+  const baseUrlError = isValidBaseUrl(values.previewBaseUrl)
+    ? undefined
+    : "Enter a full URL, e.g. https://example.com";
+
+  const setValue = (key: keyof PluginParameters) => (value: string) =>
+    setValues((current) => ({ ...current, [key]: value }));
+
+  const handleSubmit = async () => {
+    setSaving(true);
+
+    try {
+      await ctx.updatePluginParameters(values);
+      ctx.notice("Settings saved successfully!");
+    } catch (error) {
+      ctx.alert(
+        error instanceof Error ? error.message : "Could not save the settings."
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Canvas ctx={ctx}>
+      <Form
+        onSubmit={(event) => {
+          event?.preventDefault();
+          handleSubmit();
+        }}
+      >
+        <FieldGroup>
+          <TextField
+            id="previewBaseUrl"
+            name="previewBaseUrl"
+            label="Live preview base URL"
+            hint="Front-end that renders the “Live preview” sidebar. Leave empty to hide the preview."
+            placeholder="https://example.com"
+            value={values.previewBaseUrl}
+            onChange={setValue("previewBaseUrl")}
+            error={baseUrlError}
+            textInputProps={{ disabled: !canEdit }}
+          />
+
+          <TextField
+            id="demoLandingPageModelId"
+            name="demoLandingPageModelId"
+            label="Demo landing page model ID"
+            hint="Publishing is limited to one control and one variant page for this model."
+            placeholder={DEFAULT_PARAMETERS.demoLandingPageModelId}
+            value={values.demoLandingPageModelId}
+            onChange={setValue("demoLandingPageModelId")}
+            textInputProps={{ disabled: !canEdit }}
+          />
+
+          <TextField
+            id="formTemplateModelId"
+            name="formTemplateModelId"
+            label="Form template model ID"
+            hint="Model that gets the form fields validation addon."
+            placeholder={DEFAULT_PARAMETERS.formTemplateModelId}
+            value={values.formTemplateModelId}
+            onChange={setValue("formTemplateModelId")}
+            textInputProps={{ disabled: !canEdit }}
+          />
+
+          <TextField
+            id="formFieldsBlockApiKey"
+            name="formFieldsBlockApiKey"
+            label="Form fields field API key"
+            hint="Field on the model above that the validation addon attaches to."
+            placeholder={DEFAULT_PARAMETERS.formFieldsBlockApiKey}
+            value={values.formFieldsBlockApiKey}
+            onChange={setValue("formFieldsBlockApiKey")}
+            textInputProps={{ disabled: !canEdit }}
+          />
+        </FieldGroup>
+
+        {canEdit ? (
+          <Button
+            type="submit"
+            buttonType="primary"
+            buttonSize="l"
+            fullWidth
+            disabled={saving || Boolean(baseUrlError)}
+          >
+            {saving ? "Saving..." : "Save settings"}
+          </Button>
+        ) : (
+          <p>You need schema edit permissions to change these settings.</p>
+        )}
+      </Form>
+    </Canvas>
+  );
+};
+
+export default ConfigScreen;

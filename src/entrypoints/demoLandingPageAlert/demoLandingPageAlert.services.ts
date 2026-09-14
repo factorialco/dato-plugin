@@ -1,6 +1,5 @@
 import { buildClient } from "@datocms/cma-client-browser";
-
-const DEMO_LANDING_PAGE_MODEL = "evL8wHUkSgqfKeJxwaYKxA";
+import { readParameters } from "../../lib/pluginParameters";
 
 const getClient = (ctx: any) => {
   if (ctx.currentUserAccessToken) {
@@ -13,6 +12,7 @@ const getClient = (ctx: any) => {
 
 export const getDemoLandingPageInstances = async (ctx: any) => {
   const client = getClient(ctx);
+  const { demoLandingPageModelId } = readParameters(ctx);
 
   if (!client) {
     return [];
@@ -20,7 +20,7 @@ export const getDemoLandingPageInstances = async (ctx: any) => {
 
   return await client.items.list({
     filter: {
-      type: DEMO_LANDING_PAGE_MODEL,
+      type: demoLandingPageModelId,
     },
   });
 };

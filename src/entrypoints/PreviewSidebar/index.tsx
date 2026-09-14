@@ -1,6 +1,7 @@
 import { RenderItemFormSidebarCtx } from "datocms-plugin-sdk";
 import { useRef, useState } from "react";
 import { Button, Canvas } from "datocms-react-ui";
+import { readParameters } from "../../lib/pluginParameters";
 
 const PreviewSidebar = ({ ctx }: { ctx: RenderItemFormSidebarCtx }) => {
   const itemId = ctx.item?.relationships.item_type.data.id as string;
@@ -27,7 +28,7 @@ const PreviewSidebar = ({ ctx }: { ctx: RenderItemFormSidebarCtx }) => {
       lang: ctx.locale.replace("-", "_"),
     }).toString();
 
-    const baseUrl = import.meta.env.VITE_PREVIEW_BASE_URL;
+    const { previewBaseUrl: baseUrl } = readParameters(ctx);
 
     if (!baseUrl) {
       return null;

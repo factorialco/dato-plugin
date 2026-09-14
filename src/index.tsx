@@ -6,23 +6,27 @@ import {
 } from "datocms-plugin-sdk";
 import { render } from "./utils/render";
 import "datocms-react-ui/styles.css";
+import ConfigScreen from "./entrypoints/ConfigScreen";
 import PreviewSidebar from "./entrypoints/PreviewSidebar";
 import { handleDemoLandingPageCreation } from "./entrypoints/demoLandingPageAlert/demoLandingPageAlert.utils";
 import { FormFieldsValidation } from "./entrypoints/formFieldsValidation/FormFieldsValidation";
+import { readParameters } from "./lib/pluginParameters";
 
 const FORM_FIELDS_VALIDATION_ID = "formFieldsValidation";
 const PREVIEW_SIDEBAR_ID = "sideBySidePreview";
 
-const DEMO_LANDING_PAGE_MODEL_ID = "evL8wHUkSgqfKeJxwaYKxA";
-const FORM_TEMPLATE_MODEL_ID = "BZRowM-YRc66pOcGqLT9ng";
-const FORM_FIELDS_BLOCK_NAME = "form_fields";
-
 connect({
+  renderConfigScreen(ctx) {
+    return render(<ConfigScreen ctx={ctx} />);
+  },
+
   async onBeforeItemsPublish(items, ctx) {
+    const { demoLandingPageModelId } = readParameters(ctx);
+
     for (const item of items) {
       const modelId = item.relationships.item_type.data.id;
 
-      if (modelId === DEMO_LANDING_PAGE_MODEL_ID) {
+      if (modelId === demoLandingPageModelId) {
         const canCreate = await handleDemoLandingPageCreation(ctx, item);
 
         if (!canCreate) {
@@ -34,11 +38,12 @@ connect({
   },
 
   overrideFieldExtensions(field: Field, ctx: any) {
+    const { formTemplateModelId, formFieldsBlockApiKey } = readParameters(ctx);
     const modelId = ctx.itemType?.id;
 
     if (
-      modelId === FORM_TEMPLATE_MODEL_ID &&
-      field.attributes.api_key === FORM_FIELDS_BLOCK_NAME
+      modelId === formTemplateModelId &&
+      field.attributes.api_key === formFieldsBlockApiKey
     ) {
       return {
         addons: [{ id: FORM_FIELDS_VALIDATION_ID }],
@@ -60,7 +65,7 @@ connect({
   itemFormSidebars(model: ItemType, ctx: any) {
     return [
       {
-        id: "sideBySidePreview",
+        id: PREVIEW_SIDEBAR_ID,
         label: "Live preview",
         preferredWidth: 900,
         startOpen: true,

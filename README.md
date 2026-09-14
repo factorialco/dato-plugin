@@ -12,13 +12,13 @@ This project uses [pnpm](https://pnpm.io/), [Vite](https://vite.dev/) and [Vites
 pnpm install
 ```
 
-2 - Configure your environment variables in `.env` file by using `.env.example`. Only variables prefixed with `VITE_` are exposed to the app.
-
-3 - Run the dev server (http://localhost:3000)
+2 - Run the dev server (http://localhost:3000)
 
 ```
 pnpm start
 ```
+
+No `.env` file is needed: the plugin is configured from its settings screen inside DatoCMS (see [Configuration](#configuration)).
 
 ## Other commands
 
@@ -29,6 +29,19 @@ pnpm test        # run the Vitest suite once
 pnpm test:watch  # run Vitest in watch mode
 pnpm typecheck   # tsc --noEmit
 ```
+
+## Configuration
+
+Settings live on the plugin's own details page in DatoCMS (Settings → Plugins → Factorial Dato Plugin), rendered by the `renderConfigScreen` hook. They are stored as [plugin parameters](https://www.datocms.com/docs/plugin-sdk/config-screen) and propagate to all users in real time, so changing one does not require a rebuild or redeploy.
+
+| Setting | Purpose |
+| --- | --- |
+| Live preview base URL | Front-end that renders the "Live preview" sidebar. Empty (the default) hides the preview. |
+| Demo landing page model ID | Model whose published control/variant pages are checked against the limit. |
+| Form template model ID | Model that gets the form fields validation addon. |
+| Form fields field API key | Field on that model the addon attaches to. |
+
+Every setting except the preview URL falls back to the value the plugin previously hardcoded, so an existing installation keeps working until someone saves the config screen.
 
 ## Description
 
