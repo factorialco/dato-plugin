@@ -30,11 +30,36 @@ export type FieldsByItemType = Record<string, FieldDef[]>
 /** Human-readable names keyed by item type id, used in match paths. */
 export type NamesByItemType = Record<string, string>
 
+/**
+ * One spelling of the thing being searched for, with the replacement in the
+ * same spelling.
+ *
+ * A URL is stored in more than one shape: a link to the pricing page may be
+ * written `/pricing` or `https://factorialhr.com/pricing`. Searching for one
+ * spelling has to find the other, and — crucially — has to put back the shape
+ * it found. Rewriting a stored `/pricing` into an absolute URL would pin a
+ * link that currently follows whichever market serves it to a single domain.
+ */
+export type SearchVariant = {
+  find: string
+  replace: string
+  /**
+   * True for a bare-path spelling: the match must sit at a path boundary, so
+   * `/pricing` does not match inside `/pricing-calculator`.
+   */
+  pathBoundary: boolean
+}
+
 export type MatchOptions = {
   find: string
   replace: string
   caseSensitive: boolean
   wholeWord: boolean
+  /**
+   * Spellings to look for. Defaults to the literal `find`/`replace` pair when
+   * the search is not for a URL.
+   */
+  variants?: SearchVariant[]
 }
 
 /** Resolves record references to the URL path the site renders them as. */
@@ -139,17 +164,29 @@ const isWordChar = (char: string | undefined): boolean =>
   char !== undefined && /[\p{L}\p{N}_]/u.test(char)
 
 /** Byte ranges of `find` inside `text`, left to right, non-overlapping. */
-export const findOccurrences = (
+/** A path segment continues through these, so `/pricing` !== `/pricing-plans`. */
+const isPathChar = (char: string | undefined): boolean =>
+  char !== undefined && /[\p{L}\p{N}_-]/u.test(char)
+
+export const variantsOf = (options: MatchOptions): SearchVariant[] =>
+  options.variants ?? [
+    { find: options.find, replace: options.replace, pathBoundary: false }
+  ]
+
+export type Occurrence = { start: number; end: number; replace: string }
+
+const findVariant = (
   text: string,
-  { find, caseSensitive, wholeWord }: MatchOptions
-): Array<{ start: number; end: number }> => {
-  if (!find) {
+  variant: SearchVariant,
+  { caseSensitive, wholeWord }: MatchOptions
+): Occurrence[] => {
+  if (!variant.find) {
     return []
   }
 
   const haystack = caseSensitive ? text : text.toLowerCase()
-  const needle = caseSensitive ? find : find.toLowerCase()
-  const ranges: Array<{ start: number; end: number }> = []
+  const needle = caseSensitive ? variant.find : variant.find.toLowerCase()
+  const ranges: Occurrence[] = []
 
   let from = 0
 
@@ -163,12 +200,48 @@ export const findOccurrences = (
     const end = start + needle.length
     const boundedLeft = !isWordChar(text[start - 1])
     const boundedRight = !isWordChar(text[end])
+    const wordOk = !wholeWord || (boundedLeft && boundedRight)
+    // A bare path may follow a host ("...com/pricing") but must not run into
+    // a longer segment ("/pricing-calculator").
+    const pathOk = !variant.pathBoundary || !isPathChar(text[end])
 
-    if (!wholeWord || (boundedLeft && boundedRight)) {
-      ranges.push({ start, end })
+    if (wordOk && pathOk) {
+      ranges.push({ start, end, replace: variant.replace })
     }
 
     from = end > start ? end : start + 1
+  }
+
+  return ranges
+}
+
+/**
+ * Every occurrence of any spelling, left to right and non-overlapping.
+ *
+ * Longer spellings win where two overlap, so the absolute-URL form is used in
+ * preference to the bare path it contains.
+ */
+export const findOccurrences = (
+  text: string,
+  options: MatchOptions
+): Occurrence[] => {
+  const found = variantsOf(options).flatMap((variant) =>
+    findVariant(text, variant, options)
+  )
+
+  // Sorting a freshly built array, so nothing shared is mutated. `toSorted`
+  // would read better but is ES2023, past this project's target.
+  // oxlint-disable-next-line unicorn/no-array-sort
+  found.sort((a, b) => a.start - b.start || b.end - a.end)
+
+  const ranges: Occurrence[] = []
+
+  for (const range of found) {
+    const previous = ranges.at(-1)
+
+    if (!previous || range.start >= previous.end) {
+      ranges.push(range)
+    }
   }
 
   return ranges
@@ -347,7 +420,7 @@ const walkString = (
   let cursor = 0
   let changed = false
 
-  occurrences.forEach(({ start, end }, index) => {
+  occurrences.forEach(({ start, end, replace }, index) => {
     const key = `${context.recordId}|${pathKey}|${index}`
 
     context.matches.push({
@@ -355,14 +428,14 @@ const walkString = (
       recordId: context.recordId,
       path: pathLabel,
       locale: context.locale,
-      ...buildSnippet(text, start, end, context.options.replace),
+      ...buildSnippet(text, start, end, replace),
       applicable: true
     })
 
     const enabled = context.enabledKeys?.has(key) ?? false
 
     rewritten += text.slice(cursor, start)
-    rewritten += enabled ? context.options.replace : text.slice(start, end)
+    rewritten += enabled ? replace : text.slice(start, end)
     cursor = end
     changed ||= enabled
   })
