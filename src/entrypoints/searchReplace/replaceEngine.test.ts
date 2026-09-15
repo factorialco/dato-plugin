@@ -139,12 +139,14 @@ const dryRun = (locale: string | null = 'en_ke') =>
 
 describe(findOccurrences, () => {
   it('finds every non-overlapping occurrence', () => {
-    expect(findOccurrences('a-b-a-b', { ...OPTIONS, find: 'a' })).toStrictEqual(
-      [
-        { start: 0, end: 1 },
-        { start: 4, end: 5 }
-      ]
-    )
+    expect(
+      findOccurrences('a-b-a-b', { ...OPTIONS, find: 'a' }).map(
+        ({ start, end }) => ({ start, end })
+      )
+    ).toStrictEqual([
+      { start: 0, end: 1 },
+      { start: 4, end: 5 }
+    ])
   })
 
   it('is case-insensitive unless asked otherwise', () => {

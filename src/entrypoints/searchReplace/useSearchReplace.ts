@@ -3,6 +3,7 @@ import { buildClient } from '@datocms/cma-client-browser'
 import type { RenderPageCtx } from 'datocms-plugin-sdk'
 import { readParameters } from '../../lib/pluginParameters'
 import { buildLinkOptions } from './linkTargets'
+import { urlSearchVariants } from './urlVariants'
 import type {
   LinkConvention,
   LinkOptions,
@@ -199,7 +200,15 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
   )
 
   const options = useMemo<MatchOptions>(
-    () => ({ find, replace, caseSensitive, wholeWord }),
+    () => ({
+      find,
+      replace,
+      caseSensitive,
+      wholeWord,
+      // A URL is stored in more than one shape, so a URL search looks for all
+      // of them and puts back the one it found.
+      variants: urlSearchVariants(find, replace) ?? undefined
+    }),
     [find, replace, caseSensitive, wholeWord]
   )
 
