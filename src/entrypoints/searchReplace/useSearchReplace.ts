@@ -8,6 +8,7 @@ import type {
   LinkOptions,
   Match,
   MatchOptions,
+  ScanReport,
   UnsearchedBlock
 } from './replaceEngine'
 import { transformRecord } from './replaceEngine'
@@ -39,9 +40,18 @@ export type RowStatus =
  * Says what the scan could not look inside, so a page with no matches can be
  * told apart from a page that was not fully searched.
  */
-const describeUnsearched = (unsearched: UnsearchedBlock[]): string | null => {
+const describeScan = (
+  unsearched: UnsearchedBlock[],
+  report: ScanReport,
+  matched: boolean
+): string | null => {
   if (unsearched.length === 0) {
-    return null
+    // Saying what was covered is what makes "no matches" an answer rather
+    // than a shrug: a page walked end to end genuinely does not contain the
+    // term, while one that opened no blocks never really looked.
+    return matched
+      ? null
+      : `Searched ${report.values} value(s) in ${report.blocks} block(s)`
   }
 
   const notLoaded = unsearched.filter(
@@ -55,7 +65,7 @@ const describeUnsearched = (unsearched: UnsearchedBlock[]): string | null => {
       : null
   ].filter(Boolean)
 
-  return `Not fully searched: ${parts.join(', ')} — ${unsearched[0].path}`
+  return `Not fully searched (${report.values} value(s) in ${report.blocks} block(s)): ${parts.join(', ')} — ${unsearched[0].path}`
 }
 
 export type ScanRow = {
@@ -298,7 +308,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
         try {
           const record = await fetchRecord(client, recordId)
-          const { matches, unsearched } = transformRecord({
+          const { matches, unsearched, report } = transformRecord({
             record,
             itemTypeId: model.id,
             fieldsByItemType: schema.fieldsByItemType,
@@ -314,7 +324,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             recordId,
             record,
             matches,
-            message: describeUnsearched(unsearched)
+            message: describeScan(unsearched, report, matches.length > 0)
           })
         } catch (error) {
           scanned.push({
