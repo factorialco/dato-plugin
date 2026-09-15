@@ -219,8 +219,15 @@ export const isBlogPath = (path: string): boolean =>
  *
  * `datoLocaleByTld` comes from the project's own `market_configuration`
  * records and wins whenever it has an entry. Otherwise the frontend locale is
- * normalised (`en-KE` -> `en_KE`) and matched case-insensitively against the
- * project's locales, falling back to the bare language (`el-GR` -> `el`).
+ * matched case-insensitively against the project's locales, trying the locale
+ * as written (`en-KE` -> `en-ke`) and then the underscored form
+ * (`en-KE` -> `en_KE`), before falling back to the bare language
+ * (`el-GR` -> `el`).
+ *
+ * Both separators are tried because the convention is per project: this one
+ * uses hyphens (`en-GB`, `es-MX`, `en-ke`), others use underscores. Matching
+ * only the underscored form sent every regional market to its bare language —
+ * a `.mx` URL edited `es` rather than `es-MX`.
  */
 export const toDatoLocale = (
   market: Market,
@@ -241,5 +248,9 @@ export const toDatoLocale = (
   const underscored = market.locale.replace('-', '_')
   const language = market.locale.split('-')[0]
 
-  return matchInsensitive(underscored) ?? matchInsensitive(language)
+  return (
+    matchInsensitive(market.locale) ??
+    matchInsensitive(underscored) ??
+    matchInsensitive(language)
+  )
 }

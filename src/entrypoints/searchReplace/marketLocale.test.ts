@@ -107,4 +107,47 @@ describe(toDatoLocale, () => {
   it('returns null when nothing matches', () => {
     expect(toDatoLocale(kenya, ['es', 'fr'])).toBeNull()
   })
+
+  // The project writes its regional locales with hyphens, not underscores.
+  // Matching only the underscored form sent every regional market to its bare
+  // language: factorial.ke resolved to `en` and found nothing, and worse, a
+  // .mx URL would have edited `es` instead of `es-MX`.
+  const PROJECT_LOCALES = [
+    'en',
+    'es',
+    'fr',
+    'de',
+    'it',
+    'pt',
+    'pt-BR',
+    'en-GB',
+    'es-MX',
+    'ca',
+    'pl',
+    'en-ZA',
+    'en-ke',
+    'el',
+    'sr',
+    'en-AE'
+  ]
+
+  it.each([
+    ['https://factorial.ke/partnerships', 'en-ke'],
+    ['https://factorial.mx/precios', 'es-MX'],
+    ['https://factorial.co.uk/pricing', 'en-GB'],
+    ['https://factorial.com.br/precos', 'pt-BR'],
+    ['https://factorialhr.co.za/pricing', 'en-ZA'],
+    ['https://factorialhr.ae/pricing', 'en-AE']
+  ])('resolves %s to the regional locale %s', (href, expected) => {
+    expect(toDatoLocale(expectMarket(href), PROJECT_LOCALES)).toBe(expected)
+  })
+
+  it('still falls back to the bare language when there is no regional locale', () => {
+    // Greece is `el` in the project, not `el-GR`.
+    expect(toDatoLocale(greece, PROJECT_LOCALES)).toBe('el')
+  })
+
+  it('prefers the regional locale over the bare language when both exist', () => {
+    expect(toDatoLocale(kenya, ['en', 'en-ke'])).toBe('en-ke')
+  })
 })
