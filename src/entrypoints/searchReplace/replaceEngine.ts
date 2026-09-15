@@ -91,8 +91,23 @@ export type Match = {
   note?: string
 }
 
+/**
+ * A block the walk could not look inside.
+ *
+ * Reported rather than skipped in silence: a block that is not searched looks
+ * exactly like a block with nothing in it, and the difference is the whole
+ * answer when someone can see the text on the page but the scan cannot.
+ */
+export type UnsearchedBlock = {
+  /** Breadcrumb of where it sits. */
+  path: string
+  reason: 'not-loaded' | 'unknown-type'
+}
+
 export type TransformResult = {
   matches: Match[]
+  /** Blocks that could not be searched, if any. */
+  unsearched: UnsearchedBlock[]
   /** Only the top-level fields whose value changed. Empty when nothing changed. */
   changedFields: Record<string, unknown>
 }
@@ -110,6 +125,7 @@ type WalkContext = {
   namesByItemType: NamesByItemType
   /** Occurrence keys to actually rewrite. `null` means "record only, rewrite nothing". */
   enabledKeys: Set<string> | null
+  unsearched: UnsearchedBlock[]
   /** Null when the search is not for a URL, so references cannot match. */
   link: LinkOptions | null
   matches: Match[]
@@ -389,12 +405,29 @@ const walkBlock = (
   const block = asNestedBlock(value)
 
   if (!block) {
+    // A block field that came back as an id rather than a payload: the record
+    // was read without `nested`, or the API stopped hydrating at this depth.
+    // Either way its contents were never seen, so say so.
+    if (typeof value === 'string') {
+      context.unsearched.push({
+        path: pathLabelOf(path),
+        reason: 'not-loaded'
+      })
+    }
+
     return { value, changed: false }
   }
 
   const itemTypeId = itemTypeIdOf(block)
   const fields = context.fieldsByItemType[itemTypeId] ?? []
   const blockName = context.namesByItemType[itemTypeId] ?? 'Block'
+
+  if (fields.length === 0) {
+    context.unsearched.push({
+      path: pathLabelOf([...path, { key: itemTypeId, label: blockName }]),
+      reason: 'unknown-type'
+    })
+  }
   const blockPath = [...path, { key: block.id ?? itemTypeId, label: blockName }]
 
   const attributes = { ...(block.attributes as Record<string, unknown>) }
@@ -677,7 +710,8 @@ export const transformRecord = ({
     namesByItemType,
     enabledKeys,
     link,
-    matches: []
+    matches: [],
+    unsearched: []
   }
 
   const changedFields: Record<string, unknown> = {}
@@ -711,5 +745,9 @@ export const transformRecord = ({
     }
   }
 
-  return { matches: context.matches, changedFields }
+  return {
+    matches: context.matches,
+    unsearched: context.unsearched,
+    changedFields
+  }
 }
