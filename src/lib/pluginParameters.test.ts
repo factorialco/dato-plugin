@@ -86,6 +86,22 @@ describe('previewModelApiKeys', () => {
     ).toStrictEqual(['landing_page', 'blog_post'])
   })
 
+  // The config screen keeps this field as raw text and parses it once on save,
+  // so whatever half-finished string the user was typing has to survive.
+  it.each([
+    ['landing_page,', ['landing_page']],
+    ['landing_page, ', ['landing_page']],
+    ['landing_page, blog_post', ['landing_page', 'blog_post']],
+    ['  landing_page ,  blog_post  ', ['landing_page', 'blog_post']],
+    ['landing_page,,blog_post', ['landing_page', 'blog_post']],
+    [',', []],
+    ['', []]
+  ])('parses %o as typed into %o', (typed, expected) => {
+    expect(
+      normalizeParameters({ previewModelApiKeys: typed }).previewModelApiKeys
+    ).toStrictEqual(expected)
+  })
+
   it('accepts a real array and drops blank entries', () => {
     expect(
       normalizeParameters({ previewModelApiKeys: ['a', '', '  ', 'b'] })
@@ -113,5 +129,22 @@ describe('searchReplaceAllowedRoleIds', () => {
       normalizeParameters({ searchReplaceAllowedRoleIds: ['1234', '', '5678'] })
         .searchReplaceAllowedRoleIds
     ).toStrictEqual(['1234', '5678'])
+  })
+
+  // Same as the models field: the config screen holds this as raw text and
+  // parses once on save, so half-finished input has to survive.
+  it.each([
+    ['1234,', ['1234']],
+    ['1234, ', ['1234']],
+    ['1234, 5678', ['1234', '5678']],
+    ['  1234 ,  5678  ', ['1234', '5678']],
+    ['1234,,5678', ['1234', '5678']],
+    [',', []],
+    ['', []]
+  ])('parses %o as typed into %o', (typed, expected) => {
+    expect(
+      normalizeParameters({ searchReplaceAllowedRoleIds: typed })
+        .searchReplaceAllowedRoleIds
+    ).toStrictEqual(expected)
   })
 })

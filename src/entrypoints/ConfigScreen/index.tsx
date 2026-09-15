@@ -10,11 +10,30 @@ import {
 } from 'datocms-react-ui'
 import PluginHeader from './PluginHeader'
 import type { PluginParameters } from '../../lib/pluginParameters'
-import { DEFAULT_PARAMETERS, readParameters } from '../../lib/pluginParameters'
+import {
+  DEFAULT_PARAMETERS,
+  normalizeParameters,
+  readParameters
+} from '../../lib/pluginParameters'
 
 type Props = {
   ctx: RenderConfigScreenCtx
 }
+
+/**
+ * Every comma-separated field is held as raw text while editing. Parsing on every
+ * keystroke deleted the separator as it was typed: "a" + "," split to
+ * ["a", ""], the empty part was filtered out, and the field rendered back as
+ * "a" — so a second entry could never be reached. It is parsed once, on save.
+ */
+type ListParameterKey = {
+  [K in keyof PluginParameters]: PluginParameters[K] extends string[]
+    ? K
+    : never
+}[keyof PluginParameters]
+
+type FormValues = Omit<PluginParameters, ListParameterKey> &
+  Record<ListParameterKey, string>
 
 const isValidBaseUrl = (value: string) => {
   if (!value) {
@@ -30,9 +49,15 @@ const isValidBaseUrl = (value: string) => {
 }
 
 const ConfigScreen = ({ ctx }: Props) => {
-  const [values, setValues] = useState<PluginParameters>(() =>
-    readParameters(ctx)
-  )
+  const [values, setValues] = useState<FormValues>(() => {
+    const saved = readParameters(ctx)
+
+    return {
+      ...saved,
+      previewModelApiKeys: saved.previewModelApiKeys.join(', '),
+      searchReplaceAllowedRoleIds: saved.searchReplaceAllowedRoleIds.join(', ')
+    }
+  })
   const [saving, setSaving] = useState(false)
 
   const canEdit = ctx.currentRole.meta.final_permissions.can_edit_schema
@@ -41,15 +66,17 @@ const ConfigScreen = ({ ctx }: Props) => {
     : 'Enter a full URL, e.g. https://example.com'
 
   const setValue =
-    <K extends keyof PluginParameters>(key: K) =>
-    (value: PluginParameters[K]) =>
+    <K extends keyof FormValues>(key: K) =>
+    (value: FormValues[K]) =>
       setValues((current) => ({ ...current, [key]: value }))
 
   const handleSubmit = async () => {
     setSaving(true)
 
     try {
-      await ctx.updatePluginParameters(values)
+      // Normalizing here is what turns the raw models text into a list, and
+      // also trims the other fields before they are stored.
+      await ctx.updatePluginParameters(normalizeParameters(values))
       ctx.notice('Settings saved successfully!')
     } catch (error) {
       ctx.alert(
@@ -89,16 +116,8 @@ const ConfigScreen = ({ ctx }: Props) => {
             label='Live preview models'
             hint='Comma-separated model API keys to offer the preview on. Leave empty for every model.'
             placeholder='landing_page, blog_post'
-            value={values.previewModelApiKeys.join(', ')}
-            onChange={(value) =>
-              setValues((current) => ({
-                ...current,
-                previewModelApiKeys: value
-                  .split(',')
-                  .map((part) => part.trim())
-                  .filter((part) => part !== '')
-              }))
-            }
+            value={values.previewModelApiKeys}
+            onChange={setValue('previewModelApiKeys')}
             textInputProps={{ disabled: !canEdit }}
           />
 
@@ -141,16 +160,8 @@ const ConfigScreen = ({ ctx }: Props) => {
             label='Search & Replace roles'
             hint='Comma-separated role IDs allowed to use Search & Replace. Leave empty for every role. Anyone who can edit the schema keeps access either way, so the admins who own this setting cannot be locked out. This hides the tool — it does not restrict the API, which is what DatoCMS role permissions are for.'
             placeholder='Every role'
-            value={values.searchReplaceAllowedRoleIds.join(', ')}
-            onChange={(value) =>
-              setValues((current) => ({
-                ...current,
-                searchReplaceAllowedRoleIds: value
-                  .split(',')
-                  .map((part) => part.trim())
-                  .filter((part) => part !== '')
-              }))
-            }
+            value={values.searchReplaceAllowedRoleIds}
+            onChange={setValue('searchReplaceAllowedRoleIds')}
             textInputProps={{ disabled: !canEdit }}
           />
 
