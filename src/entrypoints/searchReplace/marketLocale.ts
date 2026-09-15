@@ -134,6 +134,39 @@ const matchesPathPrefix = (pathname: string, prefix: string): boolean =>
 const stripMarketPath = (pathname: string, prefix: string): string =>
   pathname === `/${prefix}` ? '/' : pathname.slice(`/${prefix}`.length)
 
+/**
+ * Both spellings are in use for the same market — factorial.co.uk and
+ * factorialhr.co.uk both serve Great Britain — so the domain name in the table
+ * is only one of them.
+ */
+const FACTORIAL_DOMAIN_NAMES = ['factorial', 'factorialhr']
+
+/**
+ * Whether `hostname` is a market's own site.
+ *
+ * The frontend gets away with `endsWith('.' + tld)` because it only ever sees
+ * its own hosts. This tool is handed arbitrary pasted URLs, where that rule
+ * claims anything sharing a TLD: `trust.factorial.co` would resolve as the
+ * Colombian market, and a link to it would be rewritten as one of its pages.
+ *
+ * So the site's own subdomains are excluded — trust., status., app. — while
+ * the bare host and its `www.` form still resolve.
+ */
+const isMarketHost = (hostname: string, market: Market): boolean => {
+  if (!hostname.endsWith(`.${market.tld}`)) {
+    return false
+  }
+
+  const labels = hostname.slice(0, -(market.tld.length + 1)).split('.')
+  const domainName = labels.at(-1) ?? ''
+  const subdomain = labels.slice(0, -1).join('.')
+
+  return (
+    FACTORIAL_DOMAIN_NAMES.includes(domainName) &&
+    (subdomain === '' || subdomain === 'www')
+  )
+}
+
 const hostnameOf = (host: string): string =>
   host.replace(/:\d+$/, '').toLowerCase()
 
@@ -175,9 +208,7 @@ export const resolveMarket = (url: URL): Market | null => {
       matchesPathPrefix(pathname, marketPath(market))
   )
 
-  const hostMarket = MARKETS.find((market) =>
-    hostname.endsWith(`.${market.tld}`)
-  )
+  const hostMarket = MARKETS.find((market) => isMarketHost(hostname, market))
 
   if (fromPublicPath && hostMarket?.isoCountryCode === GLOBAL_MARKET) {
     return { ...fromPublicPath, pathBased: true }

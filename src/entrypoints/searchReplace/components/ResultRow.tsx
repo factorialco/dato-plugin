@@ -66,11 +66,13 @@ type MatchLineProps = {
 }
 
 const MatchLine = ({ match, selected, disabled, onToggle }: MatchLineProps) => (
-  <div className={`${s.match} ${selected ? '' : s.deselected}`}>
+  <div
+    className={`${s.match} ${selected && match.applicable ? '' : s.deselected}`}
+  >
     <input
       type='checkbox'
-      checked={selected}
-      disabled={disabled}
+      checked={selected && match.applicable}
+      disabled={disabled || !match.applicable}
       aria-label={`Replace occurrence in ${match.path}`}
       onChange={() => onToggle(match.key)}
     />
@@ -82,9 +84,12 @@ const MatchLine = ({ match, selected, disabled, onToggle }: MatchLineProps) => (
       <div className={s.snippet}>
         {match.prefix}
         <span className={s.removed}>{match.matched}</span>
-        <span className={s.added}>{match.replacement}</span>
+        {match.applicable && (
+          <span className={s.added}>{match.replacement}</span>
+        )}
         {match.suffix}
       </div>
+      {match.note && <div className={s.matchNote}>{match.note}</div>}
     </div>
   </div>
 )
@@ -108,11 +113,13 @@ export const ResultRow = ({
   onApplyRow,
   onEditRecord
 }: ResultRowProps) => {
-  const selectedInRow = row.matches.filter((match) =>
+  const applicableMatches = row.matches.filter((match) => match.applicable)
+  const selectedInRow = applicableMatches.filter((match) =>
     selectedKeys.has(match.key)
   )
   const allSelected =
-    row.matches.length > 0 && selectedInRow.length === row.matches.length
+    applicableMatches.length > 0 &&
+    selectedInRow.length === applicableMatches.length
   const hasMatches = row.status === 'matched' && row.matches.length > 0
 
   return (

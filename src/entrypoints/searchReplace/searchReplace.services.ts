@@ -83,11 +83,20 @@ const pickSlugField = (fields: RawField[]): RawField | null =>
   fields.find((field) => field.api_key === 'slug') ??
   null
 
+/** Models a `link` / `links` field is allowed to point at. */
+const linkedItemTypeIds = (field: RawField): string[] => {
+  const validator = (field.validators.item_item_type ??
+    field.validators.items_item_type) as { item_types?: string[] } | undefined
+
+  return validator?.item_types ?? []
+}
+
 const toFieldDef = (field: RawField): FieldDef => ({
   apiKey: field.api_key,
   label: field.label,
   fieldType: field.field_type,
-  localized: field.localized
+  localized: field.localized,
+  linkedItemTypeIds: linkedItemTypeIds(field)
 })
 
 /**
@@ -330,4 +339,94 @@ export const applyToRecord = async (
   await client.items.publish(record.id)
 
   return { published: true, error: null }
+}
+
+/**
+ * Two-way view of what URL a record reference renders as.
+ *
+ * A link to another page is stored as a record id, and the site builds the href
+ * from that record's slug at render time — so the text "/pricing" never appears
+ * in the linking record. Resolving ids to paths is what lets a search for a URL
+ * see those links at all.
+ */
+export type LinkResolver = {
+  /** Path the referenced record renders at, in this locale. */
+  pathOf: (recordId: string, locale: string) => string | null
+  /** Record rendering at this path, in this locale. */
+  recordAt: (path: string, locale: string) => string | null
+}
+
+export const EMPTY_LINK_RESOLVER: LinkResolver = {
+  pathOf: () => null,
+  recordAt: () => null
+}
+
+/** Every model a `link` / `links` field in this schema can point at. */
+const linkTargetModelIds = (schema: SchemaIndex): string[] => {
+  const targets = new Set<string>()
+
+  for (const fields of Object.values(schema.fieldsByItemType)) {
+    for (const field of fields) {
+      if (field.fieldType !== 'link' && field.fieldType !== 'links') {
+        continue
+      }
+
+      for (const id of field.linkedItemTypeIds ?? []) {
+        targets.add(id)
+      }
+    }
+  }
+
+  return [...targets]
+}
+
+/**
+ * Builds the resolver by indexing every model that links can point at.
+ *
+ * Only models with a slug field are indexed: without one there is no path to
+ * resolve to, and a reference to such a record can never match a URL.
+ */
+export const buildLinkResolver = async (
+  client: Client,
+  schema: SchemaIndex,
+  locales: string[]
+): Promise<LinkResolver> => {
+  const targets = schema.models.filter(
+    (model) =>
+      model.slugFieldApiKey && linkTargetModelIds(schema).includes(model.id)
+  )
+
+  const indexes = await Promise.all(
+    targets.map((model) => fetchPathIndex(client, model, locales))
+  )
+
+  // locale -> path -> record id, and its inverse.
+  const byPath = new Map<string, Map<string, string>>()
+  const byRecord = new Map<string, Map<string, string>>()
+
+  for (const index of indexes) {
+    for (const [locale, paths] of index) {
+      const pathMap = byPath.get(locale) ?? new Map<string, string>()
+      const recordMap = byRecord.get(locale) ?? new Map<string, string>()
+
+      for (const [path, recordId] of paths) {
+        // First model wins, so an ambiguous path cannot silently retarget.
+        if (!pathMap.has(path)) {
+          pathMap.set(path, recordId)
+        }
+
+        if (!recordMap.has(recordId)) {
+          recordMap.set(recordId, path)
+        }
+      }
+
+      byPath.set(locale, pathMap)
+      byRecord.set(locale, recordMap)
+    }
+  }
+
+  return {
+    pathOf: (recordId, locale) => byRecord.get(locale)?.get(recordId) ?? null,
+    recordAt: (path, locale) => byPath.get(locale)?.get(path) ?? null
+  }
 }

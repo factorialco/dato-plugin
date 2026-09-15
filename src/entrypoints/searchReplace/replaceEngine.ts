@@ -20,6 +20,8 @@ export type FieldDef = {
   label: string
   fieldType: string
   localized: boolean
+  /** For `link` / `links` fields, the models the reference may point at. */
+  linkedItemTypeIds?: string[]
 }
 
 /** Field definitions keyed by item type id, for models *and* block models. */
@@ -35,6 +37,38 @@ export type MatchOptions = {
   wholeWord: boolean
 }
 
+/** Resolves record references to the URL path the site renders them as. */
+export type LinkResolver = {
+  pathOf: (recordId: string, locale: string) => string | null
+  recordAt: (path: string, locale: string) => string | null
+}
+
+/** Field names a link block uses to say "internal or external, and where". */
+export type LinkConvention = {
+  linkTypeApiKey: string
+  externalTypeValue: string
+  externalUrlApiKey: string
+}
+
+/**
+ * How to treat links that point at records rather than spelling out a URL.
+ *
+ * Repointing to another record is preferred: it keeps the link internal, so it
+ * keeps following that page if its slug later changes. Only when the
+ * replacement matches no record does the link become an external URL, which is
+ * the one shape that can express an address outside the project.
+ */
+export type LinkOptions = {
+  /** Path being searched for, e.g. `/pricing`. */
+  findPath: string
+  /** Path of the replacement, when it is one this project can resolve. */
+  replacePath: string | null
+  /** The replacement as an absolute URL, for the external fallback. */
+  replaceUrl: string
+  resolver: LinkResolver
+  convention: LinkConvention
+}
+
 /** A single occurrence, rendered as prefix + strike(matched) + ins(replacement) + suffix. */
 export type Match = {
   /** Stable across dry run and apply. */
@@ -47,6 +81,14 @@ export type Match = {
   matched: string
   replacement: string
   suffix: string
+  /**
+   * False for a match that can be reported but not rewritten — a reference the
+   * replacement cannot be expressed as. The dry run shows it and the apply
+   * skips it, rather than the occurrence being invisible.
+   */
+  applicable: boolean
+  /** Why, when `applicable` is false. */
+  note?: string
 }
 
 export type TransformResult = {
@@ -68,6 +110,8 @@ type WalkContext = {
   namesByItemType: NamesByItemType
   /** Occurrence keys to actually rewrite. `null` means "record only, rewrite nothing". */
   enabledKeys: Set<string> | null
+  /** Null when the search is not for a URL, so references cannot match. */
+  link: LinkOptions | null
   matches: Match[]
 }
 
@@ -140,6 +184,135 @@ const pathLabelOf = (path: PathSegment[]): string =>
     .filter((label) => label.length > 0)
     .join(' › ')
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/**
+ * Rewrites a reference field that points at the page being searched for.
+ *
+ * Takes the containing item type's other fields because the fallback writes to
+ * *siblings*: turning an internal link into an external one sets the type and
+ * URL next to the reference it clears. Repointing to another record is
+ * preferred — it stays internal, so it keeps following that page if its slug
+ * changes later.
+ *
+ * Only resolves against a known locale: without one there is no single path a
+ * reference renders as.
+ */
+const walkLinkField = (
+  attributes: Record<string, unknown>,
+  field: FieldDef,
+  siblings: FieldDef[],
+  path: PathSegment[],
+  context: WalkContext
+): boolean => {
+  const link = context.link
+  const locale = context.filterLocale
+
+  if (!link || !locale) {
+    return false
+  }
+
+  const stored = attributes[field.apiKey]
+  const current = field.localized
+    ? isRecord(stored)
+      ? stored[locale]
+      : undefined
+    : stored
+
+  if (typeof current !== 'string') {
+    return false
+  }
+
+  if (link.resolver.pathOf(current, locale) !== link.findPath) {
+    return false
+  }
+
+  const target = link.replacePath
+    ? link.resolver.recordAt(link.replacePath, locale)
+    : null
+
+  const linkTypeField = siblings.find(
+    (sibling) => sibling.apiKey === link.convention.linkTypeApiKey
+  )
+  const externalUrlField = siblings.find(
+    (sibling) => sibling.apiKey === link.convention.externalUrlApiKey
+  )
+  const canGoExternal = Boolean(linkTypeField && externalUrlField)
+  const applicable = Boolean(target) || canGoExternal
+
+  const fieldPath = [...path, { key: field.apiKey, label: field.label }]
+  const key = `${context.recordId}|${pathKeyOf(fieldPath)}|link`
+
+  context.matches.push({
+    key,
+    recordId: context.recordId,
+    path: pathLabelOf(fieldPath),
+    locale,
+    prefix: '',
+    matched: `${link.findPath} (linked page)`,
+    replacement: target
+      ? `${link.replacePath} (linked page)`
+      : `${link.replaceUrl} (external link)`,
+    suffix: '',
+    applicable,
+    note: applicable
+      ? undefined
+      : `Nothing to point at: no page at ${link.replaceUrl} in ${locale}, and this block has no ${link.convention.externalUrlApiKey} field to hold an external URL.`
+  })
+
+  if (!applicable || !(context.enabledKeys?.has(key) ?? false)) {
+    return false
+  }
+
+  /** Writes a sibling, respecting whether it is localized. */
+  const writeSibling = (sibling: FieldDef, value: string): void => {
+    if (!sibling.localized) {
+      attributes[sibling.apiKey] = value
+
+      return
+    }
+
+    const existing = attributes[sibling.apiKey]
+
+    attributes[sibling.apiKey] = {
+      ...(isRecord(existing) ? existing : {}),
+      [locale]: value
+    }
+  }
+
+  const writeReference = (value: string | null): void => {
+    if (!field.localized) {
+      attributes[field.apiKey] = value
+
+      return
+    }
+
+    attributes[field.apiKey] = {
+      ...(isRecord(stored) ? stored : {}),
+      [locale]: value
+    }
+  }
+
+  if (target) {
+    writeReference(target)
+
+    return true
+  }
+
+  writeReference(null)
+
+  if (linkTypeField) {
+    writeSibling(linkTypeField, link.convention.externalTypeValue)
+  }
+
+  if (externalUrlField) {
+    writeSibling(externalUrlField, link.replaceUrl)
+  }
+
+  return true
+}
+
 const walkString = (
   text: string,
   path: PathSegment[],
@@ -166,7 +339,8 @@ const walkString = (
       recordId: context.recordId,
       path: pathLabel,
       locale: context.locale,
-      ...buildSnippet(text, start, end, context.options.replace)
+      ...buildSnippet(text, start, end, context.options.replace),
+      applicable: true
     })
 
     const enabled = context.enabledKeys?.has(key) ?? false
@@ -179,9 +353,6 @@ const walkString = (
 
   return { value: rewritten + text.slice(cursor), changed }
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
 
 type NestedBlock = {
   id?: string
@@ -230,6 +401,14 @@ const walkBlock = (
   let changed = false
 
   for (const field of fields) {
+    if (field.fieldType === 'link') {
+      if (walkLinkField(attributes, field, fields, blockPath, context)) {
+        changed = true
+      }
+
+      continue
+    }
+
     // `walkField` and `walkBlock` are mutually recursive — a block's fields may
     // themselves hold blocks — so one call has to precede the definition. The
     // hoisted declaration below makes that safe at runtime.
@@ -468,6 +647,11 @@ export type TransformInput = {
    * producing an update payload — the dry run.
    */
   enabledKeys?: Set<string> | null
+  /**
+   * How to treat links stored as record references. Omit when the search is
+   * not for a URL, and references are left alone.
+   */
+  link?: LinkOptions | null
 }
 
 /**
@@ -481,7 +665,8 @@ export const transformRecord = ({
   namesByItemType,
   options,
   locale,
-  enabledKeys = null
+  enabledKeys = null,
+  link = null
 }: TransformInput): TransformResult => {
   const context: WalkContext = {
     recordId: record.id,
@@ -491,12 +676,34 @@ export const transformRecord = ({
     fieldsByItemType,
     namesByItemType,
     enabledKeys,
+    link,
     matches: []
   }
 
   const changedFields: Record<string, unknown> = {}
+  const fields = fieldsByItemType[itemTypeId] ?? []
 
-  for (const field of fieldsByItemType[itemTypeId] ?? []) {
+  // Reference fields are rewritten against a copy of the record's own
+  // attributes, since the external fallback writes to sibling fields too.
+  const rootAttributes: Record<string, unknown> = { ...record }
+
+  for (const field of fields) {
+    if (field.fieldType === 'link') {
+      if (walkLinkField(rootAttributes, field, fields, [], context)) {
+        for (const apiKey of [
+          field.apiKey,
+          link?.convention.linkTypeApiKey,
+          link?.convention.externalUrlApiKey
+        ]) {
+          if (apiKey && apiKey in rootAttributes) {
+            changedFields[apiKey] = rootAttributes[apiKey]
+          }
+        }
+      }
+
+      continue
+    }
+
     const walked = walkField(record[field.apiKey], field, [], context)
 
     if (walked.changed) {
