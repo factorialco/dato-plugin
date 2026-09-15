@@ -48,6 +48,14 @@ That URL is what the plugin's entry point should point at in DatoCMS. Deployment
 
 Vite is configured with `base: './'`, so the build works unchanged under the `/dato-plugin/` subpath a project Pages site is served from.
 
+The deploy is gated: it reuses the same lint/format/typecheck/test/build checks a pull request gets (via `workflow_call`), so a broken `main` is never published to the plugin editors actually load.
+
+### Vercel
+
+The plugin used to be hosted on Vercel. `vercel.json` sets `git.deploymentEnabled: false`, which stops Vercel from creating deployments and posting checks on pull requests — this is the only lever that works from inside the repo.
+
+To remove it for good, someone with org admin (or Vercel access) needs to disconnect the two Vercel projects still linked to this repo, or drop this repo from the Vercel GitHub App's repository access. Once that is done, `vercel.json` can be deleted.
+
 ### Keeping it out of search
 
 The page carries `<meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />`. That meta tag is what actually does the work here: GitHub Pages cannot set an `X-Robots-Tag` header, and a *project* Pages site's `robots.txt` is ignored by crawlers, which only read the one at the domain root (`factorialco.github.io/robots.txt`, owned by a different repo). The `robots.txt` in `public/` is kept for the case where this later moves to a custom domain.

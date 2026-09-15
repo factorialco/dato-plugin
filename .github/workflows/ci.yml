@@ -2,12 +2,16 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches: [main]
+  # Called by the deploy workflow so main is gated by the same checks a pull
+  # request gets, without duplicating the steps in two files.
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   check:
