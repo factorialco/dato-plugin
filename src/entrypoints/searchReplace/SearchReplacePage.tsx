@@ -102,6 +102,17 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
 
         {state.rows.length > 0 && (
           <>
+            {/*
+              Applying re-walks each record with the current options, so
+              results from different parameters must not be written. Say why
+              the button is disabled rather than just disabling it.
+            */}
+            {state.resultsStale && (
+              <div className={s.spinnerContainer}>
+                Parameters changed since this dry run — run it again to apply.
+              </div>
+            )}
+
             <ToolbarStack className={s.toolbar}>
               <div className={s.summary}>
                 <span>
@@ -127,7 +138,9 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
                 />
                 <Button
                   buttonType='primary'
-                  disabled={busy || state.pendingRows.length === 0}
+                  disabled={
+                    busy || state.resultsStale || state.pendingRows.length === 0
+                  }
                   onClick={() =>
                     confirmAndApply(
                       state.pendingRows,
@@ -148,7 +161,8 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
                 key={`${index}-${row.target.raw}`}
                 row={row}
                 selectedKeys={state.selectedKeys}
-                busy={busy}
+                // Stale results must not be applied per-row either.
+                busy={busy || state.resultsStale}
                 onToggleKey={state.handleToggleKey}
                 onToggleRow={state.handleToggleRow}
                 onApplyRow={(target) =>

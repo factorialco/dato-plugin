@@ -44,6 +44,29 @@ const errorMessage = (error: unknown): string =>
 const plural = (count: number, one: string, many = `${one}s`): string =>
   `${count} ${count === 1 ? one : many}`
 
+/**
+ * Identifies the parameters a set of results belongs to.
+ *
+ * Applying re-walks each record with the *current* options and the enabled
+ * keys collected during the scan, so the two have to agree: changing `find`
+ * after a dry run and pressing Apply would otherwise write something the
+ * preview never showed. Anything that changes which occurrences exist, or
+ * what they become, belongs here — `publishIfPublished` does not, since it
+ * only affects what happens after the rewrite.
+ */
+export const scanParametersSignature = (
+  modelId: string | null,
+  options: MatchOptions,
+  targets: ParsedTarget[]
+): string =>
+  JSON.stringify({
+    modelId,
+    options,
+    targets: searchableTargets(targets).map(
+      (target) => `${target.datoLocale}::${target.contentPath}`
+    )
+  })
+
 export const useSearchReplace = (ctx: RenderPageCtx) => {
   const [phase, setPhase] = useState<Phase>('idle')
   const [schema, setSchema] = useState<SchemaIndex | null>(null)
@@ -138,6 +161,18 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     [find, replace, caseSensitive, wholeWord]
   )
 
+  const scanSignature = useMemo(
+    () => scanParametersSignature(modelId, options, targets),
+    [modelId, options, targets]
+  )
+  const [scannedSignature, setScannedSignature] = useState<string | null>(null)
+
+  /** Results on screen no longer match the parameters in the form. */
+  const resultsStale =
+    phase === 'reviewing' &&
+    scannedSignature !== null &&
+    scannedSignature !== scanSignature
+
   const loadingSchema = Boolean(client) && !schema && !loadError
 
   const setupError =
@@ -147,7 +182,8 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       : 'This plugin needs your DatoCMS access token. Enable “Grant access to current user’s API token” in the plugin settings.')
 
   const canScan =
-    phase === 'idle' &&
+    phase !== 'scanning' &&
+    phase !== 'applying' &&
     Boolean(client && schema && model?.slugFieldApiKey && find) &&
     searchableTargets(targets).length > 0
 
@@ -245,6 +281,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
         new Set(scanned.flatMap((row) => row.matches.map((match) => match.key)))
       )
       setPhase('reviewing')
+      setScannedSignature(scanSignature)
 
       const matched = scanned.filter((row) => row.matches.length > 0)
       const occurrences = scanned.reduce(
@@ -266,7 +303,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       setProgress(null)
       setStage(null)
     }
-  }, [client, schema, model, targets, options, ctx])
+  }, [client, schema, model, targets, options, ctx, scanSignature])
 
   const toggleKey = useCallback((key: string) => {
     setSelectedKeys((current) => {
@@ -412,6 +449,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     setRows([])
     setSelectedKeys(new Set())
     setPhase('idle')
+    setScannedSignature(null)
   }, [])
 
   return {
@@ -442,6 +480,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     pendingRows,
     progress,
     canScan,
+    resultsStale,
     handleScan: scan,
     handleToggleKey: toggleKey,
     handleToggleRow: setRowSelection,
