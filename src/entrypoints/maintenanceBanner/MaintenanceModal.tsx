@@ -2,8 +2,6 @@ import type { RenderModalCtx } from 'datocms-plugin-sdk'
 import { Button, Canvas } from 'datocms-react-ui'
 import { toParagraphs } from './maintenanceBanner.utils'
 
-export const MAINTENANCE_MODAL_ID = 'maintenanceNotice'
-
 /**
  * The notice itself.
  *

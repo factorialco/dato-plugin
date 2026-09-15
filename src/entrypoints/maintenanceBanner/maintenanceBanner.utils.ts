@@ -1,5 +1,9 @@
 import type { PluginParameters } from '../../lib/pluginParameters'
 
+/** Ids for the notice surfaces, kept here so headless code can reference them. */
+export const MAINTENANCE_MODAL_ID = 'maintenanceNotice'
+export const MAINTENANCE_OUTLET_ID = 'maintenanceNotice'
+
 export type MaintenanceWindow = {
   message: string
   startsAt: string
