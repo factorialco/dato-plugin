@@ -12,11 +12,12 @@ import PreviewSidebar from './entrypoints/PreviewSidebar'
 import { handleDemoLandingPageCreation } from './entrypoints/demoLandingPageAlert/demoLandingPageAlert.utils'
 import { FormFieldsValidation } from './entrypoints/formFieldsValidation/FormFieldsValidation'
 import { handleMaintenanceBannerBoot } from './entrypoints/maintenanceBanner/maintenanceBanner'
+import { MaintenanceModal } from './entrypoints/maintenanceBanner/MaintenanceModal'
+import { MaintenanceOutlet } from './entrypoints/maintenanceBanner/MaintenanceOutlet'
 import {
   MAINTENANCE_MODAL_ID,
-  MaintenanceModal
-} from './entrypoints/maintenanceBanner/MaintenanceModal'
-import { MaintenancePage } from './entrypoints/maintenanceBanner/MaintenancePage'
+  MAINTENANCE_OUTLET_ID
+} from './entrypoints/maintenanceBanner/maintenanceBanner.utils'
 import { AccessDenied } from './entrypoints/searchReplace/components/AccessDenied'
 import { SearchReplacePage } from './entrypoints/searchReplace/SearchReplacePage'
 import { canAccessSearchReplace } from './lib/access'
@@ -25,7 +26,6 @@ import { readParameters } from './lib/pluginParameters'
 const FORM_FIELDS_VALIDATION_ID = 'formFieldsValidation'
 const PREVIEW_SIDEBAR_ID = 'sideBySidePreview'
 const SEARCH_REPLACE_PAGE_ID = 'searchReplace'
-const MAINTENANCE_PAGE_ID = 'maintenance'
 
 /**
  * Fire-and-forget wrapper: `mainNavigationTabs` is synchronous and must return
@@ -111,18 +111,8 @@ connect({
     // revisiting.
     showMaintenanceNotice(ctx)
 
-    const tabs = [
-      {
-        label: 'Maintenance',
-        icon: 'triangle-exclamation' as const,
-        pointsTo: {
-          pageId: MAINTENANCE_PAGE_ID
-        }
-      }
-    ]
-
     if (!canAccessSearchReplace(ctx)) {
-      return tabs
+      return []
     }
 
     return [
@@ -132,9 +122,25 @@ connect({
         pointsTo: {
           pageId: SEARCH_REPLACE_PAGE_ID
         }
-      },
-      ...tabs
+      }
     ]
+  },
+
+  itemFormOutlets() {
+    // Declared for every model; the outlet renders nothing when no maintenance
+    // window is configured.
+    return [{ id: MAINTENANCE_OUTLET_ID, initialHeight: 60 }]
+  },
+
+  renderItemFormOutlet(outletId, ctx) {
+    switch (outletId) {
+      case MAINTENANCE_OUTLET_ID: {
+        return render(<MaintenanceOutlet ctx={ctx} />)
+      }
+      default: {
+        return undefined
+      }
+    }
   },
 
   renderModal(modalId, ctx) {
@@ -150,9 +156,6 @@ connect({
 
   renderPage(pageId, ctx) {
     switch (pageId) {
-      case MAINTENANCE_PAGE_ID: {
-        return render(<MaintenancePage ctx={ctx} />)
-      }
       case SEARCH_REPLACE_PAGE_ID: {
         // Checked again here: hiding the tab does not stop someone navigating
         // straight to the page URL.

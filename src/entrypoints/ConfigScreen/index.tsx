@@ -224,8 +224,8 @@ const ConfigScreen = ({ ctx }: Props) => {
           <TextField
             id='maintenanceStartsAt'
             name='maintenanceStartsAt'
-            label='Maintenance starts (UTC)'
-            hint='Stored and shown here in UTC; editors see it in their own timezone.'
+            label='Maintenance starts (Madrid time)'
+            hint='Spanish time (CET/CEST). Every editor is shown this same time, labelled, whichever timezone they are in.'
             value={toDateTimeInput(values.maintenanceStartsAt)}
             onChange={(value) =>
               setValue('maintenanceStartsAt')(fromDateTimeInput(value))
