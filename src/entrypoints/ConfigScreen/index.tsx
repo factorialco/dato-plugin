@@ -11,7 +11,15 @@ import {
 } from 'datocms-react-ui'
 import PluginHeader from './PluginHeader'
 import type { PluginParameters } from '../../lib/pluginParameters'
-import { DEFAULT_PARAMETERS, readParameters } from '../../lib/pluginParameters'
+import {
+  fromDateTimeInput,
+  toDateTimeInput
+} from '../maintenanceBanner/maintenanceBanner.utils'
+import {
+  DEFAULT_MAINTENANCE_MESSAGE,
+  DEFAULT_PARAMETERS,
+  readParameters
+} from '../../lib/pluginParameters'
 
 type Props = {
   ctx: RenderConfigScreenCtx
@@ -30,21 +38,16 @@ const isValidBaseUrl = (value: string) => {
   }
 }
 
-// Native <input type="date"> / <input type="time"> always report values in
-// "YYYY-MM-DD" / "HH:mm" regardless of locale, so this round-trips cleanly
-// with the "YYYY-MM-DDTHH:mm:00.000Z" (UTC) strings stored in plugin params.
-const splitIsoDateTime = (iso: string): { date: string; time: string } => {
-  if (!iso) {
-    return { date: '', time: '' }
-  }
-
-  const [date, time] = iso.replace(/Z$/, '').split('T')
-
-  return { date: date ?? '', time: (time ?? '').slice(0, 5) }
-}
-
-const combineToIso = (date: string, time: string): string =>
-  date && time ? `${date}T${time}:00.000Z` : ''
+// <input type="datetime-local"> always reports "YYYY-MM-DDTHH:mm" regardless
+// of locale, so these round-trip cleanly with the "YYYY-MM-DDTHH:mm:00.000Z"
+// (UTC) strings stored in the plugin parameters. The field is labelled UTC and
+// the value is used as-is: no timezone conversion happens here, so what an
+// admin types is exactly what gets stored.
+// `datetime-local` is a standard input type that datocms-react-ui's `type`
+// union predates. The library passes the prop straight through to the <input>,
+// which handles it natively, so the assertion is about the union being
+// incomplete rather than about the value being wrong.
+const DATETIME_LOCAL_TYPE = 'datetime-local' as 'date'
 
 const ConfigScreen = ({ ctx }: Props) => {
   const [values, setValues] = useState<PluginParameters>(() =>
@@ -57,28 +60,20 @@ const ConfigScreen = ({ ctx }: Props) => {
     ? undefined
     : 'Enter a full URL, e.g. https://example.com'
 
-  const maintenanceStart = splitIsoDateTime(values.maintenanceStartsAt)
-
   // Only blocks saving when the banner is switched on: an incomplete window
-  // left behind after it is switched off is harmless.
-  const maintenanceError =
-    values.maintenanceEnabled &&
-    !(values.maintenanceMessage && values.maintenanceStartsAt)
-      ? 'Add a message and a start date/time, or turn the banner off.'
+  // left behind after it is switched off is harmless. Reported per field, so
+  // the message does not get flagged for a missing start time.
+  const maintenanceMessageError =
+    values.maintenanceEnabled && !values.maintenanceMessage.trim()
+      ? 'Add a message, or turn the banner off.'
       : undefined
 
-  const setMaintenanceStart = (part: 'date' | 'time') => (value: string) =>
-    setValues((current) => {
-      const { date, time } = splitIsoDateTime(current.maintenanceStartsAt)
+  const maintenanceStartError =
+    values.maintenanceEnabled && !values.maintenanceStartsAt
+      ? 'Pick when maintenance starts, or turn the banner off.'
+      : undefined
 
-      return {
-        ...current,
-        maintenanceStartsAt:
-          part === 'date'
-            ? combineToIso(value, time)
-            : combineToIso(date, value)
-      }
-    })
+  const maintenanceError = maintenanceMessageError ?? maintenanceStartError
 
   const setValue =
     <K extends keyof PluginParameters>(key: K) =>
@@ -223,34 +218,42 @@ const ConfigScreen = ({ ctx }: Props) => {
             }}
           />
 
+          <TextField
+            id='maintenanceStartsAt'
+            name='maintenanceStartsAt'
+            label='Maintenance starts (UTC)'
+            hint='Stored and shown here in UTC; editors see it in their own timezone.'
+            value={toDateTimeInput(values.maintenanceStartsAt)}
+            onChange={(value) =>
+              setValue('maintenanceStartsAt')(fromDateTimeInput(value))
+            }
+            error={maintenanceStartError}
+            textInputProps={{ type: DATETIME_LOCAL_TYPE, disabled: !canEdit }}
+          />
+
           <TextareaField
             id='maintenanceMessage'
             name='maintenanceMessage'
             label='Maintenance message'
-            hint='The start time is inserted automatically — appended at the end, or in place of {startsAt} if you include it in the text.'
+            hint='The start time is inserted where you put {startsAt}, or appended at the end if you leave it out. Blank lines start a new paragraph.'
             value={values.maintenanceMessage}
             onChange={setValue('maintenanceMessage')}
-            error={maintenanceError}
-            textareaInputProps={{ disabled: !canEdit }}
+            error={maintenanceMessageError}
+            textareaInputProps={{ disabled: !canEdit, rows: 12 }}
           />
 
-          <TextField
-            id='maintenanceStartDate'
-            name='maintenanceStartDate'
-            label='Maintenance starts — date (UTC)'
-            value={maintenanceStart.date}
-            onChange={setMaintenanceStart('date')}
-            textInputProps={{ type: 'date', disabled: !canEdit }}
-          />
-
-          <TextField
-            id='maintenanceStartTime'
-            name='maintenanceStartTime'
-            label='Maintenance starts — time (UTC)'
-            value={maintenanceStart.time}
-            onChange={setMaintenanceStart('time')}
-            textInputProps={{ type: 'time', disabled: !canEdit }}
-          />
+          {canEdit &&
+            values.maintenanceMessage !== DEFAULT_MAINTENANCE_MESSAGE && (
+              <Button
+                type='button'
+                buttonSize='xs'
+                onClick={() =>
+                  setValue('maintenanceMessage')(DEFAULT_MAINTENANCE_MESSAGE)
+                }
+              >
+                Restore default message
+              </Button>
+            )}
         </FieldGroup>
 
         {canEdit ? (

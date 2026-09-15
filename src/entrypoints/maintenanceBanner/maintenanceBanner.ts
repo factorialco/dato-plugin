@@ -1,5 +1,6 @@
 import type { Ctx } from 'datocms-plugin-sdk'
 import { readParameters } from '../../lib/pluginParameters'
+import { MAINTENANCE_MODAL_ID } from './MaintenanceModal'
 import {
   buildBannerText,
   getMaintenanceWindow
@@ -45,12 +46,14 @@ export const handleMaintenanceBannerBoot = async (ctx: Ctx): Promise<void> => {
   // quick succession — doesn't race and open two dialogs.
   window.localStorage.setItem(DISMISSED_KEY, signature)
 
-  // A blocking, centered confirm dialog — more attention-grabbing than a
-  // corner toast, and requires an explicit interaction before it closes.
-  await ctx.openConfirm({
+  // A blocking, centered modal — more attention-grabbing than a corner toast,
+  // and requires an explicit interaction before it closes. A modal rather than
+  // `openConfirm` because the message runs to several paragraphs, which that
+  // dialog's plain-string `content` cannot lay out.
+  await ctx.openModal({
+    id: MAINTENANCE_MODAL_ID,
     title: 'Scheduled maintenance',
-    content: buildBannerText(maintenanceWindow),
-    choices: [{ label: 'Got it', value: 'ack', intent: 'positive' }],
-    cancel: { label: 'Close', value: 'closed' }
+    width: 'm',
+    parameters: { text: buildBannerText(maintenanceWindow) }
   })
 }
