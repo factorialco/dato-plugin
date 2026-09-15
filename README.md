@@ -36,6 +36,24 @@ pnpm format:check  # oxfmt --check
 
 Linting and formatting use [oxlint](https://oxc.rs/) and [oxfmt](https://oxc.rs/) with the [Ultracite](https://www.ultracite.ai/) presets, matching the Factorial webpage. `oxlint.config.mjs` extends `core` + `react` + `vitest`; the webpage's `next` preset does not apply here. All of the above run in CI on every pull request.
 
+## Hosting
+
+The plugin is a static bundle that DatoCMS loads in an iframe. It is published to **GitHub Pages** at:
+
+```
+https://factorialco.github.io/dato-plugin/
+```
+
+That URL is what the plugin's entry point should point at in DatoCMS. Deployment is automatic: [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) builds and publishes on every push to `main`, and can also be run manually from the Actions tab.
+
+Vite is configured with `base: './'`, so the build works unchanged under the `/dato-plugin/` subpath a project Pages site is served from.
+
+### Keeping it out of search
+
+The page carries `<meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />`. That meta tag is what actually does the work here: GitHub Pages cannot set an `X-Robots-Tag` header, and a *project* Pages site's `robots.txt` is ignored by crawlers, which only read the one at the domain root (`factorialco.github.io/robots.txt`, owned by a different repo). The `robots.txt` in `public/` is kept for the case where this later moves to a custom domain.
+
+Note that a GitHub Pages site for a public repo is publicly reachable by anyone with the URL — `noindex` keeps it out of search results, it is not access control. Nothing sensitive is in the bundle: all configuration lives in DatoCMS plugin parameters, not in the build.
+
 ## Configuration
 
 Settings live on the plugin's own details page in DatoCMS (Settings → Plugins → Factorial Dato Plugin), rendered by the `renderConfigScreen` hook. They are stored as [plugin parameters](https://www.datocms.com/docs/plugin-sdk/config-screen) and propagate to all users in real time, so changing one does not require a rebuild or redeploy.

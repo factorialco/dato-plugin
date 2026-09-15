@@ -1,3 +1,6 @@
-# https://www.robotstxt.org/robotstxt.html
+# Kept for a custom domain, where a root robots.txt is honoured. On the default
+# project Pages URL (factorialco.github.io/dato-plugin/) crawlers only read the
+# robots.txt at the domain root, so the noindex meta tag in index.html is what
+# actually does the work.
 User-agent: *
-Disallow:
+Disallow: /

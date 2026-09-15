@@ -3,6 +3,14 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      This is an editor tool rendered inside a DatoCMS iframe, never a page to
+      land on from search. GitHub Pages cannot set an X-Robots-Tag header, and
+      a project site's robots.txt is ignored (crawlers only read the one at the
+      domain root, which belongs to another repo), so the meta tag is what
+      actually keeps this out of search results.
+    -->
+    <meta name="robots" content="noindex, nofollow, noarchive, nosnippet" />
     <title>Factorial Dato Plugin</title>
   </head>
   <body>
