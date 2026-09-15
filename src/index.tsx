@@ -10,10 +10,14 @@ import ConfigScreen from './entrypoints/ConfigScreen'
 import PreviewSidebar from './entrypoints/PreviewSidebar'
 import { handleDemoLandingPageCreation } from './entrypoints/demoLandingPageAlert/demoLandingPageAlert.utils'
 import { FormFieldsValidation } from './entrypoints/formFieldsValidation/FormFieldsValidation'
+import { AccessDenied } from './entrypoints/searchReplace/components/AccessDenied'
+import { SearchReplacePage } from './entrypoints/searchReplace/SearchReplacePage'
+import { canAccessSearchReplace } from './lib/access'
 import { readParameters } from './lib/pluginParameters'
 
 const FORM_FIELDS_VALIDATION_ID = 'formFieldsValidation'
 const PREVIEW_SIDEBAR_ID = 'sideBySidePreview'
+const SEARCH_REPLACE_PAGE_ID = 'searchReplace'
 
 connect({
   renderConfigScreen(ctx) {
@@ -64,6 +68,41 @@ connect({
     switch (fieldExtensionId) {
       case FORM_FIELDS_VALIDATION_ID: {
         return render(<FormFieldsValidation ctx={ctx} />)
+      }
+      default: {
+        return undefined
+      }
+    }
+  },
+
+  mainNavigationTabs(ctx) {
+    if (!canAccessSearchReplace(ctx)) {
+      return []
+    }
+
+    return [
+      {
+        label: 'Search & Replace',
+        icon: 'magnifying-glass' as const,
+        pointsTo: {
+          pageId: SEARCH_REPLACE_PAGE_ID
+        }
+      }
+    ]
+  },
+
+  renderPage(pageId, ctx) {
+    switch (pageId) {
+      case SEARCH_REPLACE_PAGE_ID: {
+        // Checked again here: hiding the tab does not stop someone navigating
+        // straight to the page URL.
+        return render(
+          canAccessSearchReplace(ctx) ? (
+            <SearchReplacePage ctx={ctx} />
+          ) : (
+            <AccessDenied ctx={ctx} />
+          )
+        )
       }
       default: {
         return undefined

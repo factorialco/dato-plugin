@@ -20,6 +20,11 @@ export type PluginParameters = {
    * When false (the default) the editor is only warned.
    */
   enforceDemoLandingPageLimit: boolean
+  /**
+   * Role IDs allowed to use Search & Replace. Empty means every role, so the
+   * tool does not disappear from a project that never configured it.
+   */
+  searchReplaceAllowedRoleIds: string[]
 }
 
 /**
@@ -35,7 +40,8 @@ export const DEFAULT_PARAMETERS: PluginParameters = {
   // Warn-only by default: this check could never run before the plugin
   // declared the currentUserAccessToken permission, so blocking must be
   // turned on deliberately once the warnings look right.
-  enforceDemoLandingPageLimit: false
+  enforceDemoLandingPageLimit: false,
+  searchReplaceAllowedRoleIds: []
 }
 
 const asString = (value: unknown, fallback: string): string =>
@@ -82,7 +88,8 @@ export const normalizeParameters = (
   enforceDemoLandingPageLimit:
     typeof raw?.enforceDemoLandingPageLimit === 'boolean'
       ? raw.enforceDemoLandingPageLimit
-      : DEFAULT_PARAMETERS.enforceDemoLandingPageLimit
+      : DEFAULT_PARAMETERS.enforceDemoLandingPageLimit,
+  searchReplaceAllowedRoleIds: asStringList(raw?.searchReplaceAllowedRoleIds)
 })
 
 /** Reads the normalized parameters off any hook's `ctx`. */

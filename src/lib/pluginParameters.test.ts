@@ -93,3 +93,25 @@ describe('previewModelApiKeys', () => {
     ).toStrictEqual(['a', 'b'])
   })
 })
+
+describe('searchReplaceAllowedRoleIds', () => {
+  it('defaults to every role', () => {
+    expect(normalizeParameters({}).searchReplaceAllowedRoleIds).toStrictEqual(
+      []
+    )
+  })
+
+  it('parses the comma-separated string the config screen saves', () => {
+    expect(
+      normalizeParameters({ searchReplaceAllowedRoleIds: '1234, 5678 ' })
+        .searchReplaceAllowedRoleIds
+    ).toStrictEqual(['1234', '5678'])
+  })
+
+  it('accepts a real array and drops blank entries', () => {
+    expect(
+      normalizeParameters({ searchReplaceAllowedRoleIds: ['1234', '', '5678'] })
+        .searchReplaceAllowedRoleIds
+    ).toStrictEqual(['1234', '5678'])
+  })
+})

@@ -113,6 +113,48 @@ The plugin can be easily extended to further tailor to the Factorial needs.
 - This is not a true validation, the plugin has no way to prevent the user from saving. This may change in the future with updates to the Dato Plugin SDK.
 - The validation does not work when the modal is closed right after saving. This is specially a problem because some DatoCMS views close by default after saving.
 
+### Search & Replace
+
+Adds a "Search & Replace" tab to the Top Menu for replacing inline text across a
+specific list of pages.
+
+- You give it a **model** to search in, the text to **find**, its **replacement**,
+  and a list of **page URLs**, one per line.
+- The locale of each page is derived from its URL — the market's TLD
+  (`factorial.ke` → `en_ke`) or its path prefix on the consolidated domain
+  (`factorial.com/el/...` → `el`). Only that locale is touched.
+- URLs containing `/blog` are skipped: that content lives in WordPress.
+- It searches text and multi-line text fields, slugs, SEO titles and
+  descriptions, structured text (both the prose and the URLs of link nodes),
+  and recurses into modular-content and single-block blocks.
+- **Dry run first.** Nothing is written until you say so. Every occurrence is
+  listed with its field path and surrounding text, and can be deselected
+  individually, applied one page at a time, or applied all at once.
+- Records are saved as drafts. Republishing is opt-in, and only applies to pages
+  that were fully published — a page with unpublished draft changes is always
+  left as a draft.
+
+Replacements are written with the record version read during the dry run, so a
+page edited by someone else in the meantime is rejected rather than overwritten.
+
+**Restricting access.** The plugin's settings screen has a "Search & Replace
+roles" field taking comma-separated role IDs. Leave it empty to allow every
+role; list one or more to show the tab only to them. The project owner, and
+anyone whose role can edit models and plugins (`can_edit_schema` — DatoCMS's own
+permission for managing plugins, and the same one that gates this settings
+screen), always keep access, so the administrators responsible for the setting
+cannot be locked out of it. Note this hides the tool from the UI — it is not a
+permission boundary, since anyone who can already edit those records can change
+them by other means. Use DatoCMS role permissions for actual enforcement.
+
+#### Known limitations
+- A page is matched to a record by its slug (following the parent chain for
+  nested pages). Models without a slug field cannot be targeted by URL.
+- Role restriction is UI-level only, see above.
+- The market table in `src/entrypoints/searchReplace/marketLocale.ts` mirrors
+  `webpage/lib/market/locale-map.ts` in the monorepo, and must be kept in sync
+  when a market is added or migrated to the consolidated domain.
+
 ### Landing Page Alert
 Adds an alert for Demo Landing Page model in case the limits of variant are exceeded.
 
