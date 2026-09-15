@@ -130,4 +130,21 @@ describe('searchReplaceAllowedRoleIds', () => {
         .searchReplaceAllowedRoleIds
     ).toStrictEqual(['1234', '5678'])
   })
+
+  // Same as the models field: the config screen holds this as raw text and
+  // parses once on save, so half-finished input has to survive.
+  it.each([
+    ['1234,', ['1234']],
+    ['1234, ', ['1234']],
+    ['1234, 5678', ['1234', '5678']],
+    ['  1234 ,  5678  ', ['1234', '5678']],
+    ['1234,,5678', ['1234', '5678']],
+    [',', []],
+    ['', []]
+  ])('parses %o as typed into %o', (typed, expected) => {
+    expect(
+      normalizeParameters({ searchReplaceAllowedRoleIds: typed })
+        .searchReplaceAllowedRoleIds
+    ).toStrictEqual(expected)
+  })
 })
