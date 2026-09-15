@@ -67,11 +67,33 @@ describe(activeMaintenanceWindow, () => {
     ).toBeNull()
   })
 
-  it('shows in a sandbox when the preview escape hatch is set', () => {
-    window.localStorage.setItem('factorial-maintenance-force-preview', 'true')
-
+  it('shows in a sandbox once the project opts in', () => {
     expect(
-      activeMaintenanceWindow(buildCtx(WINDOW, { isEnvironmentPrimary: false }))
+      activeMaintenanceWindow(
+        buildCtx(
+          { ...WINDOW, maintenanceShowInSandbox: true },
+          { isEnvironmentPrimary: false }
+        )
+      )
+    ).not.toBeNull()
+  })
+
+  it('still stays silent in a sandbox that has not opted in', () => {
+    expect(
+      activeMaintenanceWindow(
+        buildCtx(
+          { ...WINDOW, maintenanceShowInSandbox: false },
+          { isEnvironmentPrimary: false }
+        )
+      )
+    ).toBeNull()
+  })
+
+  it('does not need the opt-in in the primary environment', () => {
+    expect(
+      activeMaintenanceWindow(
+        buildCtx({ ...WINDOW, maintenanceShowInSandbox: false })
+      )
     ).not.toBeNull()
   })
 

@@ -221,6 +221,21 @@ const ConfigScreen = ({ ctx }: Props) => {
             }}
           />
 
+          <SwitchField
+            id='maintenanceShowInSandbox'
+            name='maintenanceShowInSandbox'
+            label='Also show the notice in sandbox environments'
+            hint='Off: only the primary environment sees it, so a window announced for production does not reach people working in a fork. On: turn this on in a sandbox to rehearse the notice before announcing it for real.'
+            value={values.maintenanceShowInSandbox}
+            onChange={setValue('maintenanceShowInSandbox')}
+            // SwitchInputProps is not partial, so name/value must be repeated.
+            switchInputProps={{
+              name: 'maintenanceShowInSandbox',
+              value: values.maintenanceShowInSandbox,
+              disabled: !canEdit
+            }}
+          />
+
           <TextField
             id='maintenanceStartsAt'
             name='maintenanceStartsAt'

@@ -7,13 +7,6 @@ import {
   getMaintenanceWindow
 } from './maintenanceBanner.utils'
 
-// Testing-only escape hatch, used by the primary-environment gate below:
-// run `window.localStorage.setItem("factorial-maintenance-force-preview", "true")`
-// in the browser console of a sandbox environment to preview the notice
-// without needing to be in the primary (main) environment. Not exposed in
-// any UI.
-const FORCE_PREVIEW_KEY = 'factorial-maintenance-force-preview'
-
 // A single fixed key (not one key per window) so dismissals are shared
 // across every open tab (localStorage, unlike sessionStorage, is shared
 // across tabs of the same origin) and never accumulate: it just gets
@@ -70,17 +63,27 @@ export type NoticeCtx = MaintenanceCtx & Pick<Ctx, 'openModal'>
 const signatureOf = (maintenanceWindow: MaintenanceWindow): string =>
   `${maintenanceWindow.message}:${maintenanceWindow.startsAt}`
 
-/** The window to announce here, or null when there is nothing to show. */
+/**
+ * The window to announce here, or null when there is nothing to show.
+ *
+ * Sandboxes stay quiet by default — a window announced for production is not
+ * news to someone working in a fork. `maintenanceShowInSandbox` opens them up
+ * so the notice can be rehearsed before it is announced for real. That is a
+ * project setting rather than the per-browser localStorage flag it replaces:
+ * the plugin runs in a cross-origin iframe, so that flag had to be set against
+ * an origin the console does not land on, and third-party storage
+ * partitioning could drop it anyway — it was unreachable in practice.
+ */
 export const activeMaintenanceWindow = (
   ctx: MaintenanceCtx
 ): MaintenanceWindow | null => {
-  const forcePreview = readStorage(FORCE_PREVIEW_KEY) === 'true'
+  const parameters = readParameters(ctx)
 
-  if (!ctx.isEnvironmentPrimary && !forcePreview) {
+  if (!ctx.isEnvironmentPrimary && !parameters.maintenanceShowInSandbox) {
     return null
   }
 
-  return getMaintenanceWindow(readParameters(ctx))
+  return getMaintenanceWindow(parameters)
 }
 
 export const isMaintenanceNoticeDismissed = (

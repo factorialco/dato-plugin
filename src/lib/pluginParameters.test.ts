@@ -185,3 +185,23 @@ describe('maintenance settings', () => {
     ).toBeFalsy()
   })
 })
+
+describe('maintenanceShowInSandbox', () => {
+  it('keeps sandboxes quiet by default', () => {
+    expect(normalizeParameters({}).maintenanceShowInSandbox).toBeFalsy()
+  })
+
+  it('reads the opt-in', () => {
+    expect(
+      normalizeParameters({ maintenanceShowInSandbox: true })
+        .maintenanceShowInSandbox
+    ).toBeTruthy()
+  })
+
+  it('ignores a non-boolean value', () => {
+    expect(
+      normalizeParameters({ maintenanceShowInSandbox: 'true' })
+        .maintenanceShowInSandbox
+    ).toBeFalsy()
+  })
+})
