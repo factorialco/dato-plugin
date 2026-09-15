@@ -37,6 +37,11 @@ export type PluginParameters = {
   maintenanceMessage: string
   /** Start of the maintenance window, as a UTC ISO string. Empty when unset. */
   maintenanceStartsAt: string
+  /**
+   * Also show the notice outside the primary environment, so the banner can be
+   * rehearsed in a sandbox before a real window is announced.
+   */
+  maintenanceShowInSandbox: boolean
 }
 
 /**
@@ -71,7 +76,8 @@ export const DEFAULT_PARAMETERS: PluginParameters = {
   searchReplaceAllowedRoleIds: [],
   maintenanceEnabled: false,
   maintenanceMessage: DEFAULT_MAINTENANCE_MESSAGE,
-  maintenanceStartsAt: ''
+  maintenanceStartsAt: '',
+  maintenanceShowInSandbox: false
 }
 
 const asString = (value: unknown, fallback: string): string =>
@@ -134,7 +140,11 @@ export const normalizeParameters = (
   maintenanceStartsAt: asString(
     raw?.maintenanceStartsAt,
     DEFAULT_PARAMETERS.maintenanceStartsAt
-  )
+  ),
+  maintenanceShowInSandbox:
+    typeof raw?.maintenanceShowInSandbox === 'boolean'
+      ? raw.maintenanceShowInSandbox
+      : DEFAULT_PARAMETERS.maintenanceShowInSandbox
 })
 
 /** Reads the normalized parameters off any hook's `ctx`. */
