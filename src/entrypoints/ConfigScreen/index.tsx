@@ -221,6 +221,38 @@ const ConfigScreen = ({ ctx }: Props) => {
             }}
           />
 
+          <TextField
+            id='linkTypeFieldApiKey'
+            name='linkTypeFieldApiKey'
+            label='Link type field'
+            hint='On link blocks, the field saying whether a link is internal or external. Search & Replace sets it when a link that pointed at a page has to become an external URL.'
+            placeholder={DEFAULT_PARAMETERS.linkTypeFieldApiKey}
+            value={values.linkTypeFieldApiKey}
+            onChange={setValue('linkTypeFieldApiKey')}
+            textInputProps={{ disabled: !canEdit }}
+          />
+
+          <TextField
+            id='linkExternalTypeValue'
+            name='linkExternalTypeValue'
+            label='Link type value for external links'
+            placeholder={DEFAULT_PARAMETERS.linkExternalTypeValue}
+            value={values.linkExternalTypeValue}
+            onChange={setValue('linkExternalTypeValue')}
+            textInputProps={{ disabled: !canEdit }}
+          />
+
+          <TextField
+            id='linkExternalUrlFieldApiKey'
+            name='linkExternalUrlFieldApiKey'
+            label='External URL field'
+            hint='The field on those blocks that holds the URL.'
+            placeholder={DEFAULT_PARAMETERS.linkExternalUrlFieldApiKey}
+            value={values.linkExternalUrlFieldApiKey}
+            onChange={setValue('linkExternalUrlFieldApiKey')}
+            textInputProps={{ disabled: !canEdit }}
+          />
+
           <SwitchField
             id='maintenanceShowInSandbox'
             name='maintenanceShowInSandbox'

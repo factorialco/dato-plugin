@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildClient } from '@datocms/cma-client-browser'
 import type { RenderPageCtx } from 'datocms-plugin-sdk'
-import type { Match, MatchOptions } from './replaceEngine'
+import { readParameters } from '../../lib/pluginParameters'
+import { buildLinkOptions } from './linkTargets'
+import type {
+  LinkConvention,
+  LinkOptions,
+  Match,
+  MatchOptions
+} from './replaceEngine'
 import { transformRecord } from './replaceEngine'
 import type {
   FullRecord,
@@ -11,6 +18,7 @@ import type {
 import {
   applyToRecord,
   fetchDatoLocaleByTld,
+  buildLinkResolver,
   fetchPathIndex,
   fetchRecord,
   fetchSchemaIndex
@@ -110,6 +118,16 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
   const siteLocales = useMemo(() => ctx.site.attributes.locales, [ctx.site])
 
+  const linkConvention = useMemo<LinkConvention>(() => {
+    const parameters = readParameters(ctx)
+
+    return {
+      linkTypeApiKey: parameters.linkTypeFieldApiKey,
+      externalTypeValue: parameters.linkExternalTypeValue,
+      externalUrlApiKey: parameters.linkExternalUrlFieldApiKey
+    }
+  }, [ctx])
+
   useEffect(() => {
     // The missing-token case is knowable during render, so it is derived below
     // rather than pushed into state from here.
@@ -202,7 +220,20 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       const locales = [
         ...new Set(searchable.map((target) => target.datoLocale as string))
       ]
-      const pathIndex = await fetchPathIndex(client, model, locales)
+      const [pathIndex, linkResolver] = await Promise.all([
+        fetchPathIndex(client, model, locales),
+        buildLinkResolver(client, schema, locales)
+      ])
+
+      // Links stored as record references render as a URL but hold an id, so
+      // a text search cannot see them. Resolving ids to paths is what lets the
+      // search match — and repoint — them.
+      const link: LinkOptions | null = buildLinkOptions({
+        find: options.find,
+        replace: options.replace,
+        resolver: linkResolver,
+        convention: linkConvention
+      })
 
       setStage(null)
       setProgress({ done: 0, total: searchable.length })
@@ -249,7 +280,8 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             fieldsByItemType: schema.fieldsByItemType,
             namesByItemType: schema.namesByItemType,
             options,
-            locale: target.datoLocale
+            locale: target.datoLocale,
+            link
           })
 
           scanned.push({
@@ -278,7 +310,15 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
       setRows(scanned)
       setSelectedKeys(
-        new Set(scanned.flatMap((row) => row.matches.map((match) => match.key)))
+        // Only what can actually be rewritten: a reference the replacement
+        // cannot be expressed as is reported, not selected.
+        new Set(
+          scanned.flatMap((row) =>
+            row.matches
+              .filter((match) => match.applicable)
+              .map((match) => match.key)
+          )
+        )
       )
       setPhase('reviewing')
       setScannedSignature(scanSignature)
@@ -303,7 +343,16 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       setProgress(null)
       setStage(null)
     }
-  }, [client, schema, model, targets, options, ctx, scanSignature])
+  }, [
+    client,
+    schema,
+    model,
+    targets,
+    options,
+    ctx,
+    scanSignature,
+    linkConvention
+  ])
 
   const toggleKey = useCallback((key: string) => {
     setSelectedKeys((current) => {
@@ -322,7 +371,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       const next = new Set(current)
 
       for (const match of row.matches) {
-        if (selected) {
+        if (selected && match.applicable) {
           next.add(match.key)
         } else {
           next.delete(match.key)
@@ -429,7 +478,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       rows.filter(
         (row) =>
           row.status === 'matched' &&
-          row.matches.some((match) => selectedKeys.has(match.key))
+          row.matches.some(
+            (match) => match.applicable && selectedKeys.has(match.key)
+          )
       ),
     [rows, selectedKeys]
   )

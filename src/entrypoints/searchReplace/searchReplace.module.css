@@ -195,3 +195,9 @@
   color: var(--alert-color);
   background: white;
 }
+
+.matchNote {
+  font-size: var(--font-size-xs);
+  color: var(--alert-color);
+  margin-top: var(--spacing-s);
+}

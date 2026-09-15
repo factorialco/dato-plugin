@@ -200,3 +200,22 @@ describe(resolveDatoLocale, () => {
     expect(resolveDatoLocale(kenya, ['fr'])).toBeNull()
   })
 })
+
+describe('host matching', () => {
+  // `trust.factorial.co` shares the `.co` TLD with the Colombian market but is
+  // not one of its hosts. Claiming it would have this tool rewrite links to an
+  // unrelated domain as if they were Colombian pages.
+  it.each([
+    'https://trust.factorial.co/',
+    'https://status.factorial.es/',
+    'https://example.co/pricing'
+  ])('does not claim %s', (href) => {
+    expect(resolveMarket(new URL(href))).toBeNull()
+  })
+
+  it('still resolves subdomains of a market host', () => {
+    expect(
+      resolveMarket(new URL('https://www.factorialhr.com/x'))?.locale
+    ).toBe('en-US')
+  })
+})

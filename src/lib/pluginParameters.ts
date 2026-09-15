@@ -42,6 +42,15 @@ export type PluginParameters = {
    * rehearsed in a sandbox before a real window is announced.
    */
   maintenanceShowInSandbox: boolean
+  /**
+   * Field holding an "internal or external" discriminator on a link block, and
+   * the value meaning external. Search & Replace sets these when it has to turn
+   * a link that pointed at a record into one pointing at a URL.
+   */
+  linkTypeFieldApiKey: string
+  linkExternalTypeValue: string
+  /** Field holding the URL on such a block. */
+  linkExternalUrlFieldApiKey: string
 }
 
 /**
@@ -77,7 +86,12 @@ export const DEFAULT_PARAMETERS: PluginParameters = {
   maintenanceEnabled: false,
   maintenanceMessage: DEFAULT_MAINTENANCE_MESSAGE,
   maintenanceStartsAt: '',
-  maintenanceShowInSandbox: false
+  maintenanceShowInSandbox: false,
+  // Matches the convention the marketing blocks already use (link_type with
+  // internal/external, internal_page, external_url).
+  linkTypeFieldApiKey: 'link_type',
+  linkExternalTypeValue: 'external',
+  linkExternalUrlFieldApiKey: 'external_url'
 }
 
 const asString = (value: unknown, fallback: string): string =>
@@ -144,7 +158,19 @@ export const normalizeParameters = (
   maintenanceShowInSandbox:
     typeof raw?.maintenanceShowInSandbox === 'boolean'
       ? raw.maintenanceShowInSandbox
-      : DEFAULT_PARAMETERS.maintenanceShowInSandbox
+      : DEFAULT_PARAMETERS.maintenanceShowInSandbox,
+  linkTypeFieldApiKey: asString(
+    raw?.linkTypeFieldApiKey,
+    DEFAULT_PARAMETERS.linkTypeFieldApiKey
+  ),
+  linkExternalTypeValue: asString(
+    raw?.linkExternalTypeValue,
+    DEFAULT_PARAMETERS.linkExternalTypeValue
+  ),
+  linkExternalUrlFieldApiKey: asString(
+    raw?.linkExternalUrlFieldApiKey,
+    DEFAULT_PARAMETERS.linkExternalUrlFieldApiKey
+  )
 })
 
 /** Reads the normalized parameters off any hook's `ctx`. */
