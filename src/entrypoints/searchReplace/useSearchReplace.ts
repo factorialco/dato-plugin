@@ -41,6 +41,9 @@ export type Phase = 'idle' | 'scanning' | 'reviewing' | 'applying'
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
+const plural = (count: number, one: string, many = `${one}s`): string =>
+  `${count} ${count === 1 ? one : many}`
+
 export const useSearchReplace = (ctx: RenderPageCtx) => {
   const [phase, setPhase] = useState<Phase>('idle')
   const [schema, setSchema] = useState<SchemaIndex | null>(null)
@@ -63,6 +66,13 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     done: number
     total: number
   } | null>(null)
+  /**
+   * What the current phase is waiting on. Building the path index pages
+   * through every record of the model, which happens before the per-page
+   * counter exists — without this the UI showed nothing at all until the
+   * first page had been scanned.
+   */
+  const [stage, setStage] = useState<string | null>(null)
 
   const client = useMemo(() => {
     if (!ctx.currentUserAccessToken) {
@@ -149,6 +159,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     setPhase('scanning')
     setRows([])
     setSelectedKeys(new Set())
+    setStage(`Indexing ${model.name} records…`)
 
     try {
       const searchable = searchableTargets(targets)
@@ -157,6 +168,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       ]
       const pathIndex = await fetchPathIndex(client, model, locales)
 
+      setStage(null)
       setProgress({ done: 0, total: searchable.length })
 
       const scanned: ScanRow[] = []
@@ -233,13 +245,28 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
         new Set(scanned.flatMap((row) => row.matches.map((match) => match.key)))
       )
       setPhase('reviewing')
+
+      const matched = scanned.filter((row) => row.matches.length > 0)
+      const occurrences = scanned.reduce(
+        (total, row) => total + row.matches.length,
+        0
+      )
+
+      // A long scan can finish while the operator is looking elsewhere, and
+      // "no matches" looks identical to "still running" without this.
+      ctx.notice(
+        occurrences === 0
+          ? `Dry run finished — no matches in ${plural(scanned.length, 'page')}`
+          : `Dry run finished — ${plural(occurrences, 'match', 'matches')} in ${plural(matched.length, 'page')}`
+      )
     } catch (error) {
       setLoadError(errorMessage(error))
       setPhase('idle')
     } finally {
       setProgress(null)
+      setStage(null)
     }
-  }, [client, schema, model, targets, options])
+  }, [client, schema, model, targets, options, ctx])
 
   const toggleKey = useCallback((key: string) => {
     setSelectedKeys((current) => {
@@ -277,6 +304,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
       setPhase('applying')
       setProgress({ done: 0, total: toApply.length })
+
+      let applied = 0
+      let failed = 0
 
       for (const row of toApply) {
         const enabledKeys = new Set(
@@ -320,7 +350,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
                 : candidate
             )
           )
+          applied += 1
         } catch (error) {
+          failed += 1
           const message = errorMessage(error)
 
           setRows((current) =>
@@ -345,8 +377,14 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
       setProgress(null)
       setPhase('reviewing')
+
+      ctx.notice(
+        failed === 0
+          ? `Applied to ${plural(applied, 'page')}`
+          : `Applied to ${plural(applied, 'page')}, ${failed} failed — see the rows below`
+      )
     },
-    [client, schema, model, options, selectedKeys, publishIfPublished]
+    [client, schema, model, options, selectedKeys, publishIfPublished, ctx]
   )
 
   const pendingRows = useMemo(
@@ -379,6 +417,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
   return {
     phase,
     loadingSchema,
+    stage,
     setupError,
     schema,
     model,

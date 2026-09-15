@@ -312,3 +312,87 @@ describe('transformRecord apply', () => {
     )
   })
 })
+
+describe('nested block recursion', () => {
+  const PAGE_T = 'page-t'
+  const SECTION_T = 'section-t'
+  const INNER_T = 'inner-t'
+
+  const fields: FieldsByItemType = {
+    [PAGE_T]: [
+      {
+        apiKey: 'sections',
+        label: 'Sections',
+        fieldType: 'rich_text',
+        localized: true
+      }
+    ],
+    [SECTION_T]: [
+      {
+        apiKey: 'cta_url',
+        label: 'CTA URL',
+        fieldType: 'string',
+        localized: false
+      },
+      {
+        apiKey: 'inner',
+        label: 'Inner',
+        fieldType: 'rich_text',
+        localized: false
+      }
+    ],
+    [INNER_T]: [
+      { apiKey: 'body', label: 'Body', fieldType: 'text', localized: false }
+    ]
+  }
+
+  const names = { [PAGE_T]: 'Page', [SECTION_T]: 'Section', [INNER_T]: 'Inner' }
+
+  const nested = (id: string, itemTypeId: string, attributes: object) => ({
+    id,
+    type: 'item',
+    attributes,
+    relationships: {
+      item_type: { data: { id: itemTypeId, type: 'item_type' } }
+    }
+  })
+
+  const record = {
+    id: 'p1',
+    sections: {
+      'en-ke': [
+        nested('b1', SECTION_T, {
+          cta_url: 'https://factorial.ke/privacy',
+          inner: [
+            nested('b2', INNER_T, { body: 'see https://factorial.ke/privacy' })
+          ]
+        })
+      ]
+    }
+  }
+
+  const scan = (locale: string | null) =>
+    transformRecord({
+      record,
+      itemTypeId: PAGE_T,
+      fieldsByItemType: fields,
+      namesByItemType: names,
+      options: OPTIONS,
+      locale
+    })
+
+  it('descends through a block list and into blocks inside blocks', () => {
+    expect(scan('en-ke').matches.map((match) => match.path)).toStrictEqual([
+      'Sections › en-ke › Section › CTA URL',
+      'Sections › en-ke › Section › Inner › Inner › Body'
+    ])
+  })
+
+  // Localized fields are filtered to the requested locale, so resolving the
+  // wrong one makes a page look as though its blocks were never searched.
+  // This is what made a mis-resolved locale present as "search is not
+  // recursing into blocks".
+  it('finds nothing in those blocks under a different locale', () => {
+    expect(scan('en').matches).toStrictEqual([])
+  })
+})
