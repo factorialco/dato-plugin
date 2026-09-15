@@ -126,7 +126,7 @@ export type Match = {
 export type UnsearchedBlock = {
   /** Breadcrumb of where it sits. */
   path: string
-  reason: 'not-loaded' | 'unknown-type'
+  reason: 'not-loaded' | 'unknown-type' | 'unrecognised-shape'
 }
 
 /** What the walk actually looked at, so "no matches" can be trusted. */
@@ -135,6 +135,15 @@ export type ScanReport = {
   blocks: number
   /** Field values examined, at every depth. */
   values: number
+  /**
+   * Field types that held something but were passed over, and any value in a
+   * block-bearing field that did not look like a block.
+   *
+   * The third way a scan can come up empty without being wrong: not an
+   * unloaded block, not an unknown block type, but a value this walk simply
+   * does not know how to open. Naming the type is what turns that into a fix.
+   */
+  skippedFieldTypes: string[]
 }
 
 export type TransformResult = {
@@ -499,6 +508,13 @@ const walkBlock = (
         path: pathLabelOf(path),
         reason: 'not-loaded'
       })
+    } else if (value !== null && value !== undefined) {
+      // An object in a block field that is not shaped like one: the payload
+      // came back in a form this walk does not know how to open.
+      context.unsearched.push({
+        path: pathLabelOf(path),
+        reason: 'unrecognised-shape'
+      })
     }
 
     return { value, changed: false }
@@ -669,6 +685,13 @@ const walkSeo = (
   return changed ? { value: next, changed: true } : { value, changed: false }
 }
 
+/** Remembers a field type that was passed over, once each. */
+const noteSkipped = (context: WalkContext, fieldType: string): void => {
+  if (!context.report.skippedFieldTypes.includes(fieldType)) {
+    context.report.skippedFieldTypes.push(fieldType)
+  }
+}
+
 const walkByFieldType = (
   value: unknown,
   fieldType: string,
@@ -711,6 +734,8 @@ const walkByFieldType = (
 
   // Everything else — assets, references, numbers, dates, colours, raw JSON —
   // either holds no prose or holds it in a shape we cannot rewrite safely.
+  noteSkipped(context, fieldType)
+
   return { value, changed: false }
 }
 
@@ -800,7 +825,7 @@ export const transformRecord = ({
     link,
     matches: [],
     unsearched: [],
-    report: { blocks: 0, values: 0 }
+    report: { blocks: 0, values: 0, skippedFieldTypes: [] }
   }
 
   const changedFields: Record<string, unknown> = {}

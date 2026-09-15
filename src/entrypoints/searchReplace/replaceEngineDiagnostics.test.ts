@@ -158,13 +158,71 @@ describe('scan coverage', () => {
       })
     ])
 
-    expect(report).toStrictEqual({ blocks: 2, values: 2 })
+    expect(report).toMatchObject({ blocks: 2, values: 2 })
   })
 
   // The signature of a page that was never really searched.
   it('reports no coverage when nothing was loaded', () => {
     const { report } = run(PAGE_FIELDS, ['blk-not-loaded'])
 
-    expect(report).toStrictEqual({ blocks: 0, values: 0 })
+    expect(report).toMatchObject({ blocks: 0, values: 0 })
+  })
+})
+
+describe('values a walk cannot open', () => {
+  it('names the field types it passed over', () => {
+    const fields: FieldsByItemType = {
+      [PAGE]: [
+        {
+          apiKey: 'config',
+          label: 'Config',
+          fieldType: 'json',
+          localized: false
+        },
+        { apiKey: 'hero', label: 'Hero', fieldType: 'video', localized: false }
+      ]
+    }
+    const { report } = transformRecord({
+      record: {
+        id: 'r1',
+        config: { cta: '/pricing' },
+        hero: { url: '/pricing' }
+      },
+      itemTypeId: PAGE,
+      fieldsByItemType: fields,
+      namesByItemType: NAMES,
+      options: OPTIONS,
+      locale: 'en'
+    })
+
+    expect(report.skippedFieldTypes).toStrictEqual(['json', 'video'])
+  })
+
+  // Not a string (so not "not loaded") and not an unknown type: a payload
+  // shaped in a way the walk does not recognise as a block at all.
+  it('reports a block field holding an unrecognised payload', () => {
+    const { unsearched } = run(PAGE_FIELDS, [
+      {
+        id: 'b1',
+        item_type: { id: FEATURE },
+        title: 'flattened, no attributes'
+      }
+    ])
+
+    expect(unsearched).toStrictEqual([
+      { path: 'Sections', reason: 'unrecognised-shape' }
+    ])
+  })
+
+  it('stays quiet when every value was opened', () => {
+    const fields: FieldsByItemType = {
+      ...PAGE_FIELDS,
+      [FEATURE]: [
+        { apiKey: 'url', label: 'URL', fieldType: 'string', localized: false }
+      ]
+    }
+    const { report } = run(fields, [block('b1', FEATURE, { url: '/nothing' })])
+
+    expect(report.skippedFieldTypes).toStrictEqual([])
   })
 })

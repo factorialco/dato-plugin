@@ -50,9 +50,15 @@ const describeScan = (
     // Saying what was covered is what makes "no matches" an answer rather
     // than a shrug: a page walked end to end genuinely does not contain the
     // term, while one that opened no blocks never really looked.
-    return matched
-      ? null
-      : `Searched ${report.values} value(s) in ${report.blocks} block(s)`
+    if (matched) {
+      return null
+    }
+
+    const covered = `Searched ${report.values} value(s) in ${report.blocks} block(s)`
+
+    return report.skippedFieldTypes.length > 0
+      ? `${covered} — skipped field types: ${report.skippedFieldTypes.join(', ')}`
+      : covered
   }
 
   const notLoaded = unsearched.filter(
