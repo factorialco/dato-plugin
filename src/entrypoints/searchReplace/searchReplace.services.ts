@@ -430,3 +430,51 @@ export const buildLinkResolver = async (
     recordAt: (path, locale) => byPath.get(locale)?.get(path) ?? null
   }
 }
+
+/** How deep a chain of referenced records to follow before giving up. */
+export const MAX_LINK_DEPTH = 6
+
+/**
+ * Loads referenced records so their contents can be searched with the page.
+ *
+ * Fetched one by one rather than through a filter, because these are records
+ * of many different models and `filter[ids]` cannot be combined with the
+ * nesting the walk needs.
+ */
+export const fetchLinkedRecords = async (
+  client: Client,
+  ids: string[]
+): Promise<Record<string, LinkedRecordPayload>> => {
+  const loaded = await mapWithConcurrency(ids, async (id) => {
+    try {
+      return [id, await fetchRecord(client, id)] as const
+    } catch {
+      // A reference the current user cannot read, or a record since deleted:
+      // the page is still worth searching without it.
+      return [id, null] as const
+    }
+  })
+
+  return Object.fromEntries(
+    loaded
+      .filter(
+        (entry): entry is readonly [string, FullRecord] => entry[1] !== null
+      )
+      .map(([id, record]) => [
+        id,
+        {
+          itemTypeId:
+            (record.item_type as { id: string } | undefined)?.id ?? '',
+          values: record as Record<string, unknown>,
+          record
+        }
+      ])
+  )
+}
+
+export type LinkedRecordPayload = {
+  itemTypeId: string
+  values: Record<string, unknown>
+  /** Kept for its version, which guards the write. */
+  record: FullRecord
+}

@@ -7,6 +7,7 @@ import { urlSearchVariants } from './urlVariants'
 import type {
   LinkConvention,
   LinkOptions,
+  LinkedRecord,
   Match,
   MatchOptions,
   ScanReport,
@@ -15,13 +16,16 @@ import type {
 import { transformRecord } from './replaceEngine'
 import type {
   FullRecord,
+  LinkedRecordPayload,
   SchemaIndex,
   SearchableModel
 } from './searchReplace.services'
 import {
+  MAX_LINK_DEPTH,
   applyToRecord,
-  fetchDatoLocaleByTld,
   buildLinkResolver,
+  fetchDatoLocaleByTld,
+  fetchLinkedRecords,
   fetchPathIndex,
   fetchRecord,
   fetchSchemaIndex
@@ -80,12 +84,25 @@ export type ScanRow = {
   status: RowStatus
   recordId: string | null
   record: FullRecord | null
+  /** Referenced records loaded with it, so applying can write to them too. */
+  linked: Record<string, LinkedRecordPayload>
   matches: Match[]
   /** Why the row is in its current state, when that needs saying. */
   message: string | null
 }
 
 export type Phase = 'idle' | 'scanning' | 'reviewing' | 'applying'
+
+/** Drops the payload down to what the engine needs. */
+const toLinkedRecords = (
+  linked: Record<string, LinkedRecordPayload>
+): Record<string, LinkedRecord> =>
+  Object.fromEntries(
+    Object.entries(linked).map(([id, payload]) => [
+      id,
+      { itemTypeId: payload.itemTypeId, values: payload.values }
+    ])
+  )
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
@@ -103,6 +120,43 @@ const plural = (count: number, one: string, many = `${one}s`): string =>
  * what they become, belongs here — `publishIfPublished` does not, since it
  * only affects what happens after the rewrite.
  */
+/**
+ * Walks a record, loading whatever it references until nothing is left
+ * pending — a page whose sections live in a linked record is only searched
+ * once that record is in hand.
+ */
+const walkWithLinkedRecords = async (
+  client: NonNullable<ReturnType<typeof buildClient>>,
+  input: Omit<Parameters<typeof transformRecord>[0], 'linkedRecords'>
+): Promise<{
+  result: ReturnType<typeof transformRecord>
+  linked: Record<string, LinkedRecordPayload>
+}> => {
+  const linked: Record<string, LinkedRecordPayload> = {}
+  const asked = new Set<string>()
+  let result = transformRecord({ ...input, linkedRecords: linked })
+
+  for (let depth = 0; depth < MAX_LINK_DEPTH; depth += 1) {
+    const missing: string[] = []
+
+    for (const id of result.pendingLinkIds) {
+      if (!asked.has(id)) {
+        asked.add(id)
+        missing.push(id)
+      }
+    }
+
+    if (missing.length === 0) {
+      break
+    }
+
+    Object.assign(linked, await fetchLinkedRecords(client, missing))
+    result = transformRecord({ ...input, linkedRecords: linked })
+  }
+
+  return { result, linked }
+}
+
 export const scanParametersSignature = (
   modelId: string | null,
   options: MatchOptions,
@@ -134,6 +188,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
   const [rows, setRows] = useState<ScanRow[]>([])
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [linkOptions, setLinkOptions] = useState<LinkOptions | null>(null)
   const [progress, setProgress] = useState<{
     done: number
     total: number
@@ -284,6 +339,8 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
         convention: linkConvention
       })
 
+      setLinkOptions(link)
+
       setStage(null)
       setProgress({ done: 0, total: searchable.length })
 
@@ -296,6 +353,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             status: 'skipped',
             recordId: null,
             record: null,
+            linked: {},
             matches: [],
             message: null
           })
@@ -312,6 +370,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             status: 'not-found',
             recordId: null,
             record: null,
+            linked: {},
             matches: [],
             message: `No ${model.name} with path ${target.contentPath} in ${target.datoLocale}`
           })
@@ -323,7 +382,10 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
         try {
           const record = await fetchRecord(client, recordId)
-          const { matches, unsearched, report } = transformRecord({
+          const {
+            result: { matches, unsearched, report },
+            linked
+          } = await walkWithLinkedRecords(client, {
             record,
             itemTypeId: model.id,
             fieldsByItemType: schema.fieldsByItemType,
@@ -338,6 +400,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             status: matches.length > 0 ? 'matched' : 'no-matches',
             recordId,
             record,
+            linked,
             matches,
             message: describeScan(unsearched, report, matches.length > 0)
           })
@@ -347,6 +410,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             status: 'error',
             recordId,
             record: null,
+            linked: {},
             matches: [],
             message: errorMessage(error)
           })
@@ -455,22 +519,42 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
         }
 
         try {
-          const { changedFields } = transformRecord({
+          const { changedFields, changedLinkedRecords } = transformRecord({
             record: row.record,
             itemTypeId: model.id,
             fieldsByItemType: schema.fieldsByItemType,
             namesByItemType: schema.namesByItemType,
             options,
             locale: row.target.datoLocale,
+            link: linkOptions,
+            linkedRecords: toLinkedRecords(row.linked),
             enabledKeys
           })
 
-          const outcome = await applyToRecord(
-            client,
-            row.record,
-            changedFields,
-            publishIfPublished
-          )
+          // Referenced records are saved first: if one of them fails, the page
+          // is left untouched rather than half-updated.
+          for (const [id, fields] of Object.entries(changedLinkedRecords)) {
+            const linked = row.linked[id]
+
+            if (linked) {
+              await applyToRecord(
+                client,
+                linked.record,
+                fields,
+                publishIfPublished
+              )
+            }
+          }
+
+          const outcome =
+            Object.keys(changedFields).length > 0
+              ? await applyToRecord(
+                  client,
+                  row.record,
+                  changedFields,
+                  publishIfPublished
+                )
+              : { published: false, error: null }
 
           setRows((current) =>
             current.map((candidate) =>
@@ -519,7 +603,16 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
           : `Applied to ${plural(applied, 'page')}, ${failed} failed — see the rows below`
       )
     },
-    [client, schema, model, options, selectedKeys, publishIfPublished, ctx]
+    [
+      client,
+      schema,
+      model,
+      options,
+      selectedKeys,
+      publishIfPublished,
+      ctx,
+      linkOptions
+    ]
   )
 
   const pendingRows = useMemo(

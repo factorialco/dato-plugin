@@ -146,8 +146,22 @@ export type ScanReport = {
   skippedFieldTypes: string[]
 }
 
+/** A record the page points at, loaded so its contents can be searched too. */
+export type LinkedRecord = {
+  itemTypeId: string
+  /** Field values, as the simplified client returns them (flattened). */
+  values: Record<string, unknown>
+}
+
 export type TransformResult = {
   matches: Match[]
+  /**
+   * Referenced records the walk wanted to look inside but did not have. The
+   * caller loads these and walks again.
+   */
+  pendingLinkIds: string[]
+  /** Rewritten fields per referenced record, keyed by record id. */
+  changedLinkedRecords: Record<string, Record<string, unknown>>
   /** Blocks that could not be searched, if any. */
   unsearched: UnsearchedBlock[]
   /** Coverage of the walk. */
@@ -171,6 +185,12 @@ type WalkContext = {
   enabledKeys: Set<string> | null
   unsearched: UnsearchedBlock[]
   report: ScanReport
+  /** Referenced records already loaded, keyed by id. */
+  linkedRecords: Record<string, LinkedRecord>
+  pendingLinkIds: Set<string>
+  changedLinkedRecords: Record<string, Record<string, unknown>>
+  /** Record ids on the current path, so a cycle cannot loop forever. */
+  visitedLinkIds: Set<string>
   /** Null when the search is not for a URL, so references cannot match. */
   link: LinkOptions | null
   matches: Match[]
@@ -422,6 +442,127 @@ const walkLinkField = (
   return true
 }
 
+/**
+ * Walks the record a reference points at, as part of the page that points at it.
+ *
+ * A page's content is not always nested inside it: a reference field can hold
+ * the record that carries the sections, and DatoCMS's embed editor renders it
+ * expanded in the form, so it reads as though it were nested. Not following
+ * these left whole pages effectively unsearched.
+ *
+ * Changes land against the referenced record's own id, because that is the
+ * record that has to be saved — and it may well be pointed at by other pages,
+ * which is why matches inside one are labelled.
+ */
+const walkLinkedRecord = (
+  recordId: string,
+  path: PathSegment[],
+  context: WalkContext
+): void => {
+  if (context.visitedLinkIds.has(recordId)) {
+    return
+  }
+
+  const linked = context.linkedRecords[recordId]
+
+  if (!linked) {
+    context.pendingLinkIds.add(recordId)
+
+    return
+  }
+
+  const fields = context.fieldsByItemType[linked.itemTypeId] ?? []
+  const name = context.namesByItemType[linked.itemTypeId] ?? 'Linked record'
+  const linkedPath = [...path, { key: recordId, label: name }]
+
+  const nested: WalkContext = {
+    ...context,
+    recordId,
+    visitedLinkIds: new Set(context.visitedLinkIds).add(recordId)
+  }
+
+  const values = { ...linked.values }
+  let changed = false
+
+  for (const field of fields) {
+    if (field.fieldType === 'link' || field.fieldType === 'links') {
+      // oxlint-disable-next-line eslint/no-use-before-define
+      if (walkReferenceField(values, field, fields, linkedPath, nested)) {
+        changed = true
+      }
+
+      continue
+    }
+
+    // oxlint-disable-next-line eslint/no-use-before-define
+    const walked = walkField(values[field.apiKey], field, linkedPath, nested)
+
+    if (walked.changed) {
+      values[field.apiKey] = walked.value
+      changed = true
+    }
+  }
+
+  if (changed) {
+    context.changedLinkedRecords[recordId] = {
+      ...context.changedLinkedRecords[recordId],
+      ...Object.fromEntries(
+        fields
+          .map((field) => [field.apiKey, values[field.apiKey]] as const)
+          .filter(([apiKey]) => values[apiKey] !== linked.values[apiKey])
+      )
+    }
+  }
+}
+
+/** Ids a reference field holds, in the locale being searched. */
+const referencedIds = (
+  value: unknown,
+  field: FieldDef,
+  locale: string | null
+): string[] => {
+  const raw = field.localized
+    ? isRecord(value) && locale
+      ? value[locale]
+      : undefined
+    : value
+
+  if (typeof raw === 'string') {
+    return [raw]
+  }
+
+  return Array.isArray(raw) ? raw.filter((id) => typeof id === 'string') : []
+}
+
+/**
+ * Handles a `link` / `links` field: rewrites it when it points at the page
+ * being replaced, and walks into whatever it points at either way.
+ */
+const walkReferenceField = (
+  attributes: Record<string, unknown>,
+  field: FieldDef,
+  siblings: FieldDef[],
+  path: PathSegment[],
+  context: WalkContext
+): boolean => {
+  const changed =
+    field.fieldType === 'link' &&
+    // oxlint-disable-next-line eslint/no-use-before-define
+    walkLinkField(attributes, field, siblings, path, context)
+
+  const fieldPath = [...path, { key: field.apiKey, label: field.label }]
+
+  for (const id of referencedIds(
+    attributes[field.apiKey],
+    field,
+    context.filterLocale
+  )) {
+    walkLinkedRecord(id, fieldPath, context)
+  }
+
+  return changed
+}
+
 const walkString = (
   text: string,
   path: PathSegment[],
@@ -538,8 +679,8 @@ const walkBlock = (
   let changed = false
 
   for (const field of fields) {
-    if (field.fieldType === 'link') {
-      if (walkLinkField(attributes, field, fields, blockPath, context)) {
+    if (field.fieldType === 'link' || field.fieldType === 'links') {
+      if (walkReferenceField(attributes, field, fields, blockPath, context)) {
         changed = true
       }
 
@@ -798,6 +939,11 @@ export type TransformInput = {
    * not for a URL, and references are left alone.
    */
   link?: LinkOptions | null
+  /**
+   * Referenced records already loaded. Anything reached but missing comes back
+   * in `pendingLinkIds` for the caller to load and walk again.
+   */
+  linkedRecords?: Record<string, LinkedRecord>
 }
 
 /**
@@ -812,7 +958,8 @@ export const transformRecord = ({
   options,
   locale,
   enabledKeys = null,
-  link = null
+  link = null,
+  linkedRecords = {}
 }: TransformInput): TransformResult => {
   const context: WalkContext = {
     recordId: record.id,
@@ -825,7 +972,11 @@ export const transformRecord = ({
     link,
     matches: [],
     unsearched: [],
-    report: { blocks: 0, values: 0, skippedFieldTypes: [] }
+    report: { blocks: 0, values: 0, skippedFieldTypes: [] },
+    linkedRecords,
+    pendingLinkIds: new Set(),
+    changedLinkedRecords: {},
+    visitedLinkIds: new Set([record.id])
   }
 
   const changedFields: Record<string, unknown> = {}
@@ -836,8 +987,8 @@ export const transformRecord = ({
   const rootAttributes: Record<string, unknown> = { ...record }
 
   for (const field of fields) {
-    if (field.fieldType === 'link') {
-      if (walkLinkField(rootAttributes, field, fields, [], context)) {
+    if (field.fieldType === 'link' || field.fieldType === 'links') {
+      if (walkReferenceField(rootAttributes, field, fields, [], context)) {
         for (const apiKey of [
           field.apiKey,
           link?.convention.linkTypeApiKey,
@@ -863,6 +1014,8 @@ export const transformRecord = ({
     matches: context.matches,
     unsearched: context.unsearched,
     report: context.report,
+    pendingLinkIds: [...context.pendingLinkIds],
+    changedLinkedRecords: context.changedLinkedRecords,
     changedFields
   }
 }
