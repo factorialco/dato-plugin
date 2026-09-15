@@ -86,6 +86,22 @@ describe('previewModelApiKeys', () => {
     ).toStrictEqual(['landing_page', 'blog_post'])
   })
 
+  // The config screen keeps this field as raw text and parses it once on save,
+  // so whatever half-finished string the user was typing has to survive.
+  it.each([
+    ['landing_page,', ['landing_page']],
+    ['landing_page, ', ['landing_page']],
+    ['landing_page, blog_post', ['landing_page', 'blog_post']],
+    ['  landing_page ,  blog_post  ', ['landing_page', 'blog_post']],
+    ['landing_page,,blog_post', ['landing_page', 'blog_post']],
+    [',', []],
+    ['', []]
+  ])('parses %o as typed into %o', (typed, expected) => {
+    expect(
+      normalizeParameters({ previewModelApiKeys: typed }).previewModelApiKeys
+    ).toStrictEqual(expected)
+  })
+
   it('accepts a real array and drops blank entries', () => {
     expect(
       normalizeParameters({ previewModelApiKeys: ['a', '', '  ', 'b'] })
