@@ -43,6 +43,16 @@ const rowSubtitle = (row: ScanRow): string => {
 
   const parts = [row.target.contentPath, row.target.datoLocale].filter(Boolean)
 
+  // Resolved without a market_configuration record, by dropping the region
+  // from the market's locale. Right for most markets, wrong for any that
+  // shares another region's content (Argentina uses es-MX), and the locale
+  // string cannot tell them apart — so say it was inferred.
+  if (row.target.localeFromLanguage) {
+    parts.push(
+      `⚠ inferred from ${row.target.market?.locale ?? 'the market'} — no market_configuration entry`
+    )
+  }
+
   return row.message
     ? `${parts.join(' · ')} — ${row.message}`
     : parts.join(' · ')

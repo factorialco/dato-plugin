@@ -3,8 +3,8 @@ import {
   contentPathFor,
   isBlogPath,
   normalizePath,
-  resolveMarket,
-  toDatoLocale
+  resolveDatoLocale,
+  resolveMarket
 } from './marketLocale'
 
 /** Why a pasted URL will not be searched. `null` means it will be. */
@@ -24,6 +24,14 @@ export type ParsedTarget = {
   /** Path within the market, market prefix stripped, e.g. `/partnerships`. */
   contentPath: string | null
   skipReason: TargetSkipReason | null
+  /**
+   * True when the market's regional locale is absent from the project and its
+   * bare language was used instead. Correct for markets that really are the
+   * language (Greece is `el`), wrong for one that shares another region's
+   * content (Argentina uses `es-MX`), which only `market_configuration` can
+   * express — so it is surfaced rather than silently trusted.
+   */
+  localeFromLanguage: boolean
 }
 
 const withProtocol = (line: string): string =>
@@ -69,7 +77,8 @@ export const parseTargets = (
           market: null,
           datoLocale: null,
           contentPath: null,
-          skipReason: 'invalid-url'
+          skipReason: 'invalid-url',
+          localeFromLanguage: false
         }
       }
 
@@ -79,7 +88,8 @@ export const parseTargets = (
           market: null,
           datoLocale: null,
           contentPath: normalizePath(url.pathname),
-          skipReason: 'blog'
+          skipReason: 'blog',
+          localeFromLanguage: false
         }
       }
 
@@ -91,28 +101,39 @@ export const parseTargets = (
           market: null,
           datoLocale: null,
           contentPath: normalizePath(url.pathname),
-          skipReason: 'unknown-market'
+          skipReason: 'unknown-market',
+          localeFromLanguage: false
         }
       }
 
       const contentPath = contentPathFor(url, market)
-      const datoLocale = toDatoLocale(market, siteLocales, datoLocaleByTld)
+      const resolution = resolveDatoLocale(market, siteLocales, datoLocaleByTld)
 
-      if (!datoLocale) {
+      if (!resolution) {
         return {
           raw,
           market,
           datoLocale: null,
           contentPath,
-          skipReason: 'unknown-locale'
+          skipReason: 'unknown-locale',
+          localeFromLanguage: false
         }
       }
+
+      const datoLocale = resolution.locale
 
       const identity = `${datoLocale}::${contentPath}`
       const skipReason = seen.has(identity) ? ('duplicate' as const) : null
       seen.add(identity)
 
-      return { raw, market, datoLocale, contentPath, skipReason }
+      return {
+        raw,
+        market,
+        datoLocale,
+        contentPath,
+        skipReason,
+        localeFromLanguage: resolution.source === 'language'
+      }
     })
 }
 
