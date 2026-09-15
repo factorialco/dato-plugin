@@ -6,6 +6,7 @@ import {
   FieldGroup,
   Form,
   SwitchField,
+  TextareaField,
   TextField
 } from 'datocms-react-ui'
 import PluginHeader from './PluginHeader'
@@ -48,6 +49,22 @@ const isValidBaseUrl = (value: string) => {
   }
 }
 
+// Native <input type="date"> / <input type="time"> always report values in
+// "YYYY-MM-DD" / "HH:mm" regardless of locale, so this round-trips cleanly
+// with the "YYYY-MM-DDTHH:mm:00.000Z" (UTC) strings stored in plugin params.
+const splitIsoDateTime = (iso: string): { date: string; time: string } => {
+  if (!iso) {
+    return { date: '', time: '' }
+  }
+
+  const [date, time] = iso.replace(/Z$/, '').split('T')
+
+  return { date: date ?? '', time: (time ?? '').slice(0, 5) }
+}
+
+const combineToIso = (date: string, time: string): string =>
+  date && time ? `${date}T${time}:00.000Z` : ''
+
 const ConfigScreen = ({ ctx }: Props) => {
   const [values, setValues] = useState<FormValues>(() => {
     const saved = readParameters(ctx)
@@ -64,6 +81,29 @@ const ConfigScreen = ({ ctx }: Props) => {
   const baseUrlError = isValidBaseUrl(values.previewBaseUrl)
     ? undefined
     : 'Enter a full URL, e.g. https://example.com'
+
+  const maintenanceStart = splitIsoDateTime(values.maintenanceStartsAt)
+
+  // Only blocks saving when the banner is switched on: an incomplete window
+  // left behind after it is switched off is harmless.
+  const maintenanceError =
+    values.maintenanceEnabled &&
+    !(values.maintenanceMessage && values.maintenanceStartsAt)
+      ? 'Add a message and a start date/time, or turn the banner off.'
+      : undefined
+
+  const setMaintenanceStart = (part: 'date' | 'time') => (value: string) =>
+    setValues((current) => {
+      const { date, time } = splitIsoDateTime(current.maintenanceStartsAt)
+
+      return {
+        ...current,
+        maintenanceStartsAt:
+          part === 'date'
+            ? combineToIso(value, time)
+            : combineToIso(date, value)
+      }
+    })
 
   const setValue =
     <K extends keyof FormValues>(key: K) =>
@@ -179,6 +219,49 @@ const ConfigScreen = ({ ctx }: Props) => {
               disabled: !canEdit
             }}
           />
+          <SwitchField
+            id='maintenanceEnabled'
+            name='maintenanceEnabled'
+            label='Enable maintenance banner'
+            hint='While enabled, editors in the primary environment see a notice until they dismiss it. Turn it off manually once maintenance is over.'
+            value={values.maintenanceEnabled}
+            onChange={setValue('maintenanceEnabled')}
+            // SwitchInputProps is not partial, so name/value must be repeated.
+            switchInputProps={{
+              name: 'maintenanceEnabled',
+              value: values.maintenanceEnabled,
+              disabled: !canEdit
+            }}
+          />
+
+          <TextareaField
+            id='maintenanceMessage'
+            name='maintenanceMessage'
+            label='Maintenance message'
+            hint='The start time is inserted automatically — appended at the end, or in place of {startsAt} if you include it in the text.'
+            value={values.maintenanceMessage}
+            onChange={setValue('maintenanceMessage')}
+            error={maintenanceError}
+            textareaInputProps={{ disabled: !canEdit }}
+          />
+
+          <TextField
+            id='maintenanceStartDate'
+            name='maintenanceStartDate'
+            label='Maintenance starts — date (UTC)'
+            value={maintenanceStart.date}
+            onChange={setMaintenanceStart('date')}
+            textInputProps={{ type: 'date', disabled: !canEdit }}
+          />
+
+          <TextField
+            id='maintenanceStartTime'
+            name='maintenanceStartTime'
+            label='Maintenance starts — time (UTC)'
+            value={maintenanceStart.time}
+            onChange={setMaintenanceStart('time')}
+            textInputProps={{ type: 'time', disabled: !canEdit }}
+          />
         </FieldGroup>
 
         {canEdit ? (
@@ -187,7 +270,7 @@ const ConfigScreen = ({ ctx }: Props) => {
             buttonType='primary'
             buttonSize='l'
             fullWidth
-            disabled={saving || Boolean(baseUrlError)}
+            disabled={saving || Boolean(baseUrlError ?? maintenanceError)}
           >
             {saving ? 'Saving...' : 'Save settings'}
           </Button>

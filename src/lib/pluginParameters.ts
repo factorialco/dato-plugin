@@ -25,6 +25,18 @@ export type PluginParameters = {
    * tool does not disappear from a project that never configured it.
    */
   searchReplaceAllowedRoleIds: string[]
+  /**
+   * While true, editors in the primary environment are shown the scheduled
+   * maintenance notice until they dismiss it.
+   */
+  maintenanceEnabled: boolean
+  /**
+   * Body of the notice. `{startsAt}` is replaced with the formatted start
+   * time; without it the time is appended instead.
+   */
+  maintenanceMessage: string
+  /** Start of the maintenance window, as a UTC ISO string. Empty when unset. */
+  maintenanceStartsAt: string
 }
 
 /**
@@ -41,7 +53,10 @@ export const DEFAULT_PARAMETERS: PluginParameters = {
   // declared the currentUserAccessToken permission, so blocking must be
   // turned on deliberately once the warnings look right.
   enforceDemoLandingPageLimit: false,
-  searchReplaceAllowedRoleIds: []
+  searchReplaceAllowedRoleIds: [],
+  maintenanceEnabled: false,
+  maintenanceMessage: '',
+  maintenanceStartsAt: ''
 }
 
 const asString = (value: unknown, fallback: string): string =>
@@ -89,7 +104,19 @@ export const normalizeParameters = (
     typeof raw?.enforceDemoLandingPageLimit === 'boolean'
       ? raw.enforceDemoLandingPageLimit
       : DEFAULT_PARAMETERS.enforceDemoLandingPageLimit,
-  searchReplaceAllowedRoleIds: asStringList(raw?.searchReplaceAllowedRoleIds)
+  searchReplaceAllowedRoleIds: asStringList(raw?.searchReplaceAllowedRoleIds),
+  maintenanceEnabled:
+    typeof raw?.maintenanceEnabled === 'boolean'
+      ? raw.maintenanceEnabled
+      : DEFAULT_PARAMETERS.maintenanceEnabled,
+  maintenanceMessage: asString(
+    raw?.maintenanceMessage,
+    DEFAULT_PARAMETERS.maintenanceMessage
+  ),
+  maintenanceStartsAt: asString(
+    raw?.maintenanceStartsAt,
+    DEFAULT_PARAMETERS.maintenanceStartsAt
+  )
 })
 
 /** Reads the normalized parameters off any hook's `ctx`. */

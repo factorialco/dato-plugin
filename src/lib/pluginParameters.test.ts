@@ -148,3 +148,33 @@ describe('searchReplaceAllowedRoleIds', () => {
     ).toStrictEqual(expected)
   })
 })
+
+describe('maintenance settings', () => {
+  it('defaults to a disabled, unconfigured banner', () => {
+    expect(normalizeParameters({})).toMatchObject({
+      maintenanceEnabled: false,
+      maintenanceMessage: '',
+      maintenanceStartsAt: ''
+    })
+  })
+
+  it('reads a configured window', () => {
+    expect(
+      normalizeParameters({
+        maintenanceEnabled: true,
+        maintenanceMessage: 'Back soon',
+        maintenanceStartsAt: '2026-07-10T08:00:00.000Z'
+      })
+    ).toMatchObject({
+      maintenanceEnabled: true,
+      maintenanceMessage: 'Back soon',
+      maintenanceStartsAt: '2026-07-10T08:00:00.000Z'
+    })
+  })
+
+  it('ignores a non-boolean enabled flag', () => {
+    expect(
+      normalizeParameters({ maintenanceEnabled: 'true' }).maintenanceEnabled
+    ).toBeFalsy()
+  })
+})
