@@ -1,4 +1,13 @@
 import type { PluginParameters } from '../../lib/pluginParameters'
+import {
+  MAINTENANCE_TIME_ZONE_LABEL,
+  fromMadridInput,
+  madridDateOf,
+  madridDayNumber,
+  madridTimeOf,
+  madridWeekdayOf,
+  toMadridInput
+} from './madridTime'
 
 /** Ids for the notice surfaces, kept here so headless code can reference them. */
 export const MAINTENANCE_MODAL_ID = 'maintenanceNotice'
@@ -48,37 +57,26 @@ export const getMaintenanceWindow = (
 // it's not used, the start time is appended at the end instead.
 export const START_PLACEHOLDER = '{startsAt}'
 
-/** Midnight of `date`'s own calendar day, in the reader's timezone. */
-const startOfDay = (date: Date): number =>
-  new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-
-const MS_PER_DAY = 24 * 60 * 60 * 1000
-
 /**
- * The start time as a reader would say it — "Today at 09:00", "Tomorrow at
- * 14:30", "Monday at 08:00", "12 Oct 2026 at 08:00".
+ * The start time as a reader would say it — "Today at 09:00 (Madrid time)",
+ * "Tomorrow at 14:30 (Madrid time)", "Monday at 08:00 (Madrid time)",
+ * "12 Oct 2026 at 08:00 (Madrid time)".
  *
  * Nearby days read as words because that is what makes the notice land: an
  * editor skims "Today at 14:00" far faster than a date they have to decode.
  * Beyond the coming week the relative form stops helping ("in 23 days"), so it
  * falls back to a plain date.
  *
- * Both parts render in the reader's own locale and timezone, converted from
- * the UTC value stored in the plugin parameters.
+ * Every part is Madrid's — including which day counts as "today", so the words
+ * and the clock never disagree — and the zone is always named, since most
+ * readers are not in it.
  */
 export const formatMaintenanceStart = (
   startsAt: string,
   now: Date = new Date()
 ): string => {
   const date = new Date(startsAt)
-  // `Math.round` rather than a floor: across a DST boundary the two midnights
-  // are 23 or 25 hours apart, which would otherwise shift the day by one.
-  const dayDiff = Math.round((startOfDay(date) - startOfDay(now)) / MS_PER_DAY)
-
-  const time = date.toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  const dayDiff = madridDayNumber(date) - madridDayNumber(now)
 
   const day = (): string => {
     if (dayDiff === 0) {
@@ -94,13 +92,13 @@ export const formatMaintenanceStart = (
     }
 
     if (dayDiff > 1 && dayDiff < 7) {
-      return date.toLocaleDateString(undefined, { weekday: 'long' })
+      return madridWeekdayOf(date)
     }
 
-    return date.toLocaleDateString(undefined, { dateStyle: 'medium' })
+    return madridDateOf(date)
   }
 
-  return `${day()} at ${time}`
+  return `${day()} at ${madridTimeOf(date)} (${MAINTENANCE_TIME_ZONE_LABEL})`
 }
 
 /**
@@ -140,20 +138,9 @@ export const toParagraphs = (text: string): string[][] =>
     )
     .filter((lines) => lines.length > 0)
 
-// <input type="datetime-local"> always reports "YYYY-MM-DDTHH:mm" regardless of
-// locale, so these round-trip cleanly with the "YYYY-MM-DDTHH:mm:00.000Z" (UTC)
-// strings stored in the plugin parameters. The value is used as-is — no
-// timezone conversion — so what an admin types is exactly what gets stored,
-// which is what lets the field be labelled UTC honestly.
-export const toDateTimeInput = (iso: string): string =>
-  iso ? iso.replace(/Z$/, '').slice(0, 16) : ''
+// The input is Madrid time, not UTC: `madridTime` owns the conversion, and
+// the stored value stays a UTC instant.
+export const toDateTimeInput = (iso: string): string => toMadridInput(iso)
 
-export const fromDateTimeInput = (value: string): string => {
-  if (!value) {
-    return ''
-  }
-
-  const [date, time = ''] = value.split('T')
-
-  return `${date}T${time.slice(0, 5)}:00.000Z`
-}
+export const fromDateTimeInput = (value: string): string =>
+  fromMadridInput(value)

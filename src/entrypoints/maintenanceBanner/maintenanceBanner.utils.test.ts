@@ -150,27 +150,23 @@ describe(toParagraphs, () => {
 })
 
 describe('datetime-local round trip', () => {
+  // The conversion itself is covered in madridTime.test.ts; these check that
+  // the utils surface carries Madrid semantics rather than UTC.
   it('survives a round trip unchanged', () => {
     const stored = '2026-07-10T08:30:00.000Z'
 
     expect(fromDateTimeInput(toDateTimeInput(stored))).toBe(stored)
   })
 
-  it('renders the stored value for the input, without the zone suffix', () => {
-    expect(toDateTimeInput('2026-07-10T08:30:00.000Z')).toBe('2026-07-10T08:30')
+  it('renders a stored instant on a Madrid clock, not a UTC one', () => {
+    expect(toDateTimeInput('2026-07-10T08:30:00.000Z')).toBe('2026-07-10T10:30')
   })
 
   // Regression: the field used to be a separate date and a separate time, and
   // recombining them wiped the value whenever only one had been picked.
   // A single input has no half-filled state to lose.
-  it('keeps a value typed into the input', () => {
-    expect(fromDateTimeInput('2026-07-10T08:30')).toBe(
-      '2026-07-10T08:30:00.000Z'
-    )
-  })
-
-  it('tolerates an input that includes seconds', () => {
-    expect(fromDateTimeInput('2026-07-10T08:30:45')).toBe(
+  it('keeps a value typed into the input, reading it as Madrid time', () => {
+    expect(fromDateTimeInput('2026-07-10T10:30')).toBe(
       '2026-07-10T08:30:00.000Z'
     )
   })
