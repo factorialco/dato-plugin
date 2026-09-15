@@ -129,10 +129,20 @@ export type UnsearchedBlock = {
   reason: 'not-loaded' | 'unknown-type'
 }
 
+/** What the walk actually looked at, so "no matches" can be trusted. */
+export type ScanReport = {
+  /** Blocks opened and walked. */
+  blocks: number
+  /** Field values examined, at every depth. */
+  values: number
+}
+
 export type TransformResult = {
   matches: Match[]
   /** Blocks that could not be searched, if any. */
   unsearched: UnsearchedBlock[]
+  /** Coverage of the walk. */
+  report: ScanReport
   /** Only the top-level fields whose value changed. Empty when nothing changed. */
   changedFields: Record<string, unknown>
 }
@@ -151,6 +161,7 @@ type WalkContext = {
   /** Occurrence keys to actually rewrite. `null` means "record only, rewrite nothing". */
   enabledKeys: Set<string> | null
   unsearched: UnsearchedBlock[]
+  report: ScanReport
   /** Null when the search is not for a URL, so references cannot match. */
   link: LinkOptions | null
   matches: Match[]
@@ -407,6 +418,8 @@ const walkString = (
   path: PathSegment[],
   context: WalkContext
 ): Walked => {
+  context.report.values += 1
+
   const occurrences = findOccurrences(text, context.options)
 
   if (occurrences.length === 0) {
@@ -502,6 +515,8 @@ const walkBlock = (
     })
   }
   const blockPath = [...path, { key: block.id ?? itemTypeId, label: blockName }]
+
+  context.report.blocks += 1
 
   const attributes = { ...(block.attributes as Record<string, unknown>) }
   let changed = false
@@ -784,7 +799,8 @@ export const transformRecord = ({
     enabledKeys,
     link,
     matches: [],
-    unsearched: []
+    unsearched: [],
+    report: { blocks: 0, values: 0 }
   }
 
   const changedFields: Record<string, unknown> = {}
@@ -821,6 +837,7 @@ export const transformRecord = ({
   return {
     matches: context.matches,
     unsearched: context.unsearched,
+    report: context.report,
     changedFields
   }
 }

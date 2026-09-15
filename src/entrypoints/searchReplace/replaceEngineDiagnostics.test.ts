@@ -123,3 +123,48 @@ describe('blocks that cannot be searched', () => {
     expect(unsearched).toStrictEqual([])
   })
 })
+
+describe('scan coverage', () => {
+  it('counts the blocks opened and values examined', () => {
+    const fields: FieldsByItemType = {
+      ...PAGE_FIELDS,
+      [FEATURE]: [
+        {
+          apiKey: 'ctas',
+          label: 'CTAs',
+          fieldType: 'rich_text',
+          localized: false
+        },
+        {
+          apiKey: 'title',
+          label: 'Title',
+          fieldType: 'string',
+          localized: false
+        }
+      ],
+      [CTA]: [
+        {
+          apiKey: 'external_url',
+          label: 'External URL',
+          fieldType: 'string',
+          localized: false
+        }
+      ]
+    }
+    const { report } = run(fields, [
+      block('b1', FEATURE, {
+        title: 'Features',
+        ctas: [block('b2', CTA, { external_url: '/somewhere' })]
+      })
+    ])
+
+    expect(report).toStrictEqual({ blocks: 2, values: 2 })
+  })
+
+  // The signature of a page that was never really searched.
+  it('reports no coverage when nothing was loaded', () => {
+    const { report } = run(PAGE_FIELDS, ['blk-not-loaded'])
+
+    expect(report).toStrictEqual({ blocks: 0, values: 0 })
+  })
+})
