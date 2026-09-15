@@ -79,13 +79,24 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
           )
         )}
 
-        {busy && state.progress && (
+        {/*
+          Shown for the whole of a busy phase, not only once the per-page
+          counter exists: building the path index runs before the first page
+          is scanned, and previously left the screen looking idle.
+        */}
+        {busy && (
           <div className={s.spinnerContainer}>
             <Spinner placement='inline' />
-            {state.phase === 'scanning' ? 'Scanning' : 'Applying'}{' '}
-            {state.progress.done}
-            {' / '}
-            {state.progress.total}
+            {state.progress ? (
+              <>
+                {state.phase === 'scanning' ? 'Scanning' : 'Applying'}{' '}
+                {state.progress.done}
+                {' / '}
+                {state.progress.total}
+              </>
+            ) : (
+              (state.stage ?? 'Working…')
+            )}
           </div>
         )}
 
