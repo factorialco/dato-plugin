@@ -12,6 +12,10 @@ import PreviewSidebar from './entrypoints/PreviewSidebar'
 import { handleDemoLandingPageCreation } from './entrypoints/demoLandingPageAlert/demoLandingPageAlert.utils'
 import { FormFieldsValidation } from './entrypoints/formFieldsValidation/FormFieldsValidation'
 import { handleMaintenanceBannerBoot } from './entrypoints/maintenanceBanner/maintenanceBanner'
+import {
+  MAINTENANCE_MODAL_ID,
+  MaintenanceModal
+} from './entrypoints/maintenanceBanner/MaintenanceModal'
 import { MaintenancePage } from './entrypoints/maintenanceBanner/MaintenancePage'
 import { AccessDenied } from './entrypoints/searchReplace/components/AccessDenied'
 import { SearchReplacePage } from './entrypoints/searchReplace/SearchReplacePage'
@@ -131,6 +135,17 @@ connect({
       },
       ...tabs
     ]
+  },
+
+  renderModal(modalId, ctx) {
+    switch (modalId) {
+      case MAINTENANCE_MODAL_ID: {
+        return render(<MaintenanceModal ctx={ctx} />)
+      }
+      default: {
+        return undefined
+      }
+    }
   },
 
   renderPage(pageId, ctx) {

@@ -40,6 +40,21 @@ export type PluginParameters = {
 }
 
 /**
+ * Starting point for the maintenance notice, used until an admin edits it.
+ *
+ * `{startsAt}` is replaced with the formatted start time — see
+ * `buildBannerText`. Blank lines separate paragraphs in the dialog.
+ */
+export const DEFAULT_MAINTENANCE_MESSAGE = `{startsAt}, we'll be performing maintenance work in DatoCMS.
+
+Please DO NOT make any edits during that time to prevent conflicts or data loss, and make sure any change is saved before then. We will kick any editor out during the maintenance window.
+
+Please follow #team-growth-marketing for more updates. Once this banner disappears, maintenance is done.
+
+Thank you for your patience,
+Growth Marketing Team ❤️`
+
+/**
  * Values the plugin used before these settings were configurable. They keep
  * existing installations working until someone saves the config screen.
  */
@@ -55,7 +70,7 @@ export const DEFAULT_PARAMETERS: PluginParameters = {
   enforceDemoLandingPageLimit: false,
   searchReplaceAllowedRoleIds: [],
   maintenanceEnabled: false,
-  maintenanceMessage: '',
+  maintenanceMessage: DEFAULT_MAINTENANCE_MESSAGE,
   maintenanceStartsAt: ''
 }
 
@@ -109,10 +124,13 @@ export const normalizeParameters = (
     typeof raw?.maintenanceEnabled === 'boolean'
       ? raw.maintenanceEnabled
       : DEFAULT_PARAMETERS.maintenanceEnabled,
-  maintenanceMessage: asString(
-    raw?.maintenanceMessage,
-    DEFAULT_PARAMETERS.maintenanceMessage
-  ),
+  // Not `asString`: an admin who deliberately clears the message should get an
+  // empty field back, not the default silently reinstated. The default is only
+  // for projects that have never saved one.
+  maintenanceMessage:
+    typeof raw?.maintenanceMessage === 'string'
+      ? raw.maintenanceMessage.trim()
+      : DEFAULT_MAINTENANCE_MESSAGE,
   maintenanceStartsAt: asString(
     raw?.maintenanceStartsAt,
     DEFAULT_PARAMETERS.maintenanceStartsAt
