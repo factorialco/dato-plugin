@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  DEFAULT_MAINTENANCE_MESSAGE,
   DEFAULT_PARAMETERS,
   normalizeParameters,
   readParameters
@@ -150,12 +151,18 @@ describe('searchReplaceAllowedRoleIds', () => {
 })
 
 describe('maintenance settings', () => {
-  it('defaults to a disabled, unconfigured banner', () => {
+  it('defaults to a disabled banner with the standard message ready to go', () => {
     expect(normalizeParameters({})).toMatchObject({
       maintenanceEnabled: false,
-      maintenanceMessage: '',
+      maintenanceMessage: DEFAULT_MAINTENANCE_MESSAGE,
       maintenanceStartsAt: ''
     })
+  })
+
+  it('keeps a message an admin deliberately cleared', () => {
+    expect(
+      normalizeParameters({ maintenanceMessage: '   ' }).maintenanceMessage
+    ).toBe('')
   })
 
   it('reads a configured window', () => {
