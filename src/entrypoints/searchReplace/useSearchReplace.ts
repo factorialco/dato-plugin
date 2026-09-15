@@ -7,7 +7,8 @@ import type {
   LinkConvention,
   LinkOptions,
   Match,
-  MatchOptions
+  MatchOptions,
+  UnsearchedBlock
 } from './replaceEngine'
 import { transformRecord } from './replaceEngine'
 import type {
@@ -33,6 +34,29 @@ export type RowStatus =
   | 'matched'
   | 'applied'
   | 'error'
+
+/**
+ * Says what the scan could not look inside, so a page with no matches can be
+ * told apart from a page that was not fully searched.
+ */
+const describeUnsearched = (unsearched: UnsearchedBlock[]): string | null => {
+  if (unsearched.length === 0) {
+    return null
+  }
+
+  const notLoaded = unsearched.filter(
+    (block) => block.reason === 'not-loaded'
+  ).length
+  const unknown = unsearched.length - notLoaded
+  const parts = [
+    notLoaded > 0 ? `${notLoaded} block(s) were not loaded` : null,
+    unknown > 0
+      ? `${unknown} block(s) are of a type this plugin has no fields for`
+      : null
+  ].filter(Boolean)
+
+  return `Not fully searched: ${parts.join(', ')} — ${unsearched[0].path}`
+}
 
 export type ScanRow = {
   target: ParsedTarget
@@ -274,7 +298,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
         try {
           const record = await fetchRecord(client, recordId)
-          const { matches } = transformRecord({
+          const { matches, unsearched } = transformRecord({
             record,
             itemTypeId: model.id,
             fieldsByItemType: schema.fieldsByItemType,
@@ -290,7 +314,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             recordId,
             record,
             matches,
-            message: null
+            message: describeUnsearched(unsearched)
           })
         } catch (error) {
           scanned.push({
