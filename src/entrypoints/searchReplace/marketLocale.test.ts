@@ -4,6 +4,7 @@ import {
   contentPathFor,
   isBlogPath,
   resolveMarket,
+  resolveDatoLocale,
   toDatoLocale
 } from './marketLocale'
 
@@ -32,7 +33,7 @@ describe(resolveMarket, () => {
   })
 
   it('resolves migrated markets from their prefix on the consolidated domain', () => {
-    expect(marketOf('https://factorial.com/el/pricing')?.locale).toBe('el-GR')
+    expect(marketOf('https://factorial.com/gr/pricing')?.locale).toBe('el-GR')
     expect(marketOf('https://factorial.com/za/pricing')?.locale).toBe('en-ZA')
   })
 
@@ -41,7 +42,7 @@ describe(resolveMarket, () => {
   })
 
   it('does not match a prefix that is only a substring of the first segment', () => {
-    expect(marketOf('https://factorial.com/elsewhere')).toBeNull()
+    expect(marketOf('https://factorial.com/greatness')).toBeNull()
   })
 
   it('returns null for a domain no market claims', () => {
@@ -57,14 +58,14 @@ describe(contentPathFor, () => {
   })
 
   it('strips the market prefix on the consolidated domain', () => {
-    const url = new URL('https://factorial.com/el/pricing')
+    const url = new URL('https://factorial.com/gr/pricing')
 
     expect(contentPathFor(url, resolveMarket(url))).toBe('/pricing')
   })
 
   it('normalises trailing slashes and the market root', () => {
     const trailing = new URL('https://factorial.ke/payroll/')
-    const root = new URL('https://factorial.com/el')
+    const root = new URL('https://factorial.com/gr')
 
     expect(contentPathFor(trailing, resolveMarket(trailing))).toBe('/payroll')
     expect(contentPathFor(root, resolveMarket(root))).toBe('/')
@@ -72,7 +73,7 @@ describe(contentPathFor, () => {
 })
 
 describe(isBlogPath, () => {
-  it.each(['/blog', '/blog/', '/blog/some-post', '/el/blog/post'])(
+  it.each(['/blog', '/blog/', '/blog/some-post', '/gr/blog/post'])(
     'skips %s',
     (path) => expect(isBlogPath(path)).toBeTruthy()
   )
@@ -84,7 +85,7 @@ describe(isBlogPath, () => {
 
 describe(toDatoLocale, () => {
   const kenya = expectMarket('https://factorial.ke/x')
-  const greece = expectMarket('https://factorial.com/el/x')
+  const greece = expectMarket('https://factorial.com/gr/x')
 
   it('matches the underscored locale case-insensitively', () => {
     expect(toDatoLocale(kenya, ['en', 'es', 'en_ke'])).toBe('en_ke')
@@ -149,5 +150,53 @@ describe(toDatoLocale, () => {
 
   it('prefers the regional locale over the bare language when both exist', () => {
     expect(toDatoLocale(kenya, ['en', 'en-ke'])).toBe('en-ke')
+  })
+})
+
+describe(resolveDatoLocale, () => {
+  const kenya = expectMarket('https://factorial.ke/x')
+  const greece = expectMarket('https://factorial.com/gr/x')
+  const argentina = expectMarket('https://factorial.com/ar/x')
+  const spain = expectMarket('https://factorial.es/x')
+
+  it('reports a configured locale as configured', () => {
+    expect(
+      resolveDatoLocale(kenya, ['en', 'en-ke'], { ke: 'en' })
+    ).toStrictEqual({ locale: 'en', source: 'configured' })
+  })
+
+  it('reports a regional match as exact', () => {
+    expect(resolveDatoLocale(kenya, ['en', 'en-ke'])).toStrictEqual({
+      locale: 'en-ke',
+      source: 'exact'
+    })
+  })
+
+  // Argentina's content lives in es-MX, which only market_configuration can
+  // say. Falling back to `es` would edit Spain's pages, so the fallback is
+  // reported rather than passed off as a match.
+  it('reports a dropped region as a language fallback', () => {
+    expect(resolveDatoLocale(argentina, ['en', 'es', 'es-MX'])).toStrictEqual({
+      locale: 'es',
+      source: 'language'
+    })
+  })
+
+  it('reports Greece as inferred too, though el is right for it', () => {
+    expect(resolveDatoLocale(greece, ['en', 'el'])).toStrictEqual({
+      locale: 'el',
+      source: 'language'
+    })
+  })
+
+  it('reports Spain as inferred, since es-ES is not a project locale', () => {
+    expect(resolveDatoLocale(spain, ['en', 'es'])).toStrictEqual({
+      locale: 'es',
+      source: 'language'
+    })
+  })
+
+  it('returns null when nothing matches', () => {
+    expect(resolveDatoLocale(kenya, ['fr'])).toBeNull()
   })
 })

@@ -100,8 +100,7 @@ export const MARKETS: Market[] = [
     isoCountryCode: 'gr',
     domainName: 'factorialhr',
     pathBased: true,
-    migrated: true,
-    path: 'el'
+    migrated: true
   },
   {
     tld: 'rs',
@@ -229,15 +228,30 @@ export const isBlogPath = (path: string): boolean =>
  * only the underscored form sent every regional market to its bare language —
  * a `.mx` URL edited `es` rather than `es-MX`.
  */
-export const toDatoLocale = (
+export type LocaleResolution = {
+  locale: string
+  /**
+   * How the locale was found.
+   *
+   * `language` means the market's regional locale is not in this project and
+   * the bare language was used. That is right for most markets — Spain is
+   * `es`, Greece is `el` — but wrong for one that shares another region's
+   * content, and nothing in the locale string distinguishes the two: only a
+   * `market_configuration` record can. It is reported so that a market
+   * resolved without one can be seen rather than assumed.
+   */
+  source: 'configured' | 'exact' | 'language'
+}
+
+export const resolveDatoLocale = (
   market: Market,
   siteLocales: string[],
   datoLocaleByTld: Record<string, string> = {}
-): string | null => {
+): LocaleResolution | null => {
   const configured = datoLocaleByTld[market.tld]
 
   if (configured && siteLocales.includes(configured)) {
-    return configured
+    return { locale: configured, source: 'configured' }
   }
 
   const matchInsensitive = (candidate: string) =>
@@ -247,10 +261,20 @@ export const toDatoLocale = (
 
   const underscored = market.locale.replace('-', '_')
   const language = market.locale.split('-')[0]
+  const exact = matchInsensitive(market.locale) ?? matchInsensitive(underscored)
 
-  return (
-    matchInsensitive(market.locale) ??
-    matchInsensitive(underscored) ??
-    matchInsensitive(language)
-  )
+  if (exact) {
+    return { locale: exact, source: 'exact' }
+  }
+
+  const byLanguage = matchInsensitive(language)
+
+  return byLanguage ? { locale: byLanguage, source: 'language' } : null
 }
+
+export const toDatoLocale = (
+  market: Market,
+  siteLocales: string[],
+  datoLocaleByTld: Record<string, string> = {}
+): string | null =>
+  resolveDatoLocale(market, siteLocales, datoLocaleByTld)?.locale ?? null
