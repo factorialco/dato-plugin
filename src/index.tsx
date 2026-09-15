@@ -1,80 +1,102 @@
-import { connect, Field, ItemType, RenderItemFormSidebarCtx } from "datocms-plugin-sdk";
-import { render } from "./utils/render";
-import ConfigScreen from "./entrypoints/configScreen/ConfigScreen";
-import "datocms-react-ui/styles.css";
-import { MarketingFormCampaignField } from "./entrypoints/campaignField/CampaignField";
-import { FormsPage } from "./entrypoints/formsPage/FormsPage";
-import { MARKETING_FORM_CAMPAIGN } from "./constants/marketingFormCampaign";
-import PreviewSidebar from "./entrypoints/PreviewSidebar";
-import { handleDemoLandingPageCreation } from "./entrypoints/demoLandingPageAlert/demoLandingPageAlert.utils";
-import { FormFieldsValidation } from "./entrypoints/formFieldsValidation/FormFieldsValidation";
-import { handleMaintenanceBannerBoot } from "./entrypoints/maintenanceBanner/maintenanceBanner";
-import { MaintenancePage } from "./entrypoints/maintenanceBanner/MaintenancePage";
+import type {
+  Ctx,
+  Field,
+  ItemType,
+  RenderItemFormSidebarCtx
+} from 'datocms-plugin-sdk'
+import { connect } from 'datocms-plugin-sdk'
+import { render } from './utils/render'
+import 'datocms-react-ui/styles.css'
+import ConfigScreen from './entrypoints/ConfigScreen'
+import PreviewSidebar from './entrypoints/PreviewSidebar'
+import { handleDemoLandingPageCreation } from './entrypoints/demoLandingPageAlert/demoLandingPageAlert.utils'
+import { FormFieldsValidation } from './entrypoints/formFieldsValidation/FormFieldsValidation'
+import { handleMaintenanceBannerBoot } from './entrypoints/maintenanceBanner/maintenanceBanner'
+import { MaintenancePage } from './entrypoints/maintenanceBanner/MaintenancePage'
+import { AccessDenied } from './entrypoints/searchReplace/components/AccessDenied'
+import { SearchReplacePage } from './entrypoints/searchReplace/SearchReplacePage'
+import { canAccessSearchReplace } from './lib/access'
+import { readParameters } from './lib/pluginParameters'
 
-const FORMS_PAGE_ID = "forms";
-const MAINTENANCE_PAGE_ID = "maintenance";
-const CAMPAIGN_FIELD_ID = "marketingFormCampaign";
-const FORM_FIELDS_VALIDATION_ID = "formFieldsValidation";
-const PREVIEW_SIDEBAR_ID = "sideBySidePreview";
+const FORM_FIELDS_VALIDATION_ID = 'formFieldsValidation'
+const PREVIEW_SIDEBAR_ID = 'sideBySidePreview'
+const SEARCH_REPLACE_PAGE_ID = 'searchReplace'
+const MAINTENANCE_PAGE_ID = 'maintenance'
 
-const DEMO_LANDING_PAGE_MODEL_ID = "evL8wHUkSgqfKeJxwaYKxA";
-const FORM_TEMPLATE_MODEL_ID = "BZRowM-YRc66pOcGqLT9ng";
-const FORM_FIELDS_BLOCK_NAME = "form_fields"
+/**
+ * Fire-and-forget wrapper: `mainNavigationTabs` is synchronous and must return
+ * its tabs regardless, so a failed notice is swallowed rather than allowed to
+ * break the navigation.
+ */
+const showMaintenanceNotice = async (ctx: Ctx): Promise<void> => {
+  try {
+    await handleMaintenanceBannerBoot(ctx)
+  } catch {
+    // Nothing actionable, and nothing worth interrupting the editor for.
+  }
+}
 
 connect({
   renderConfigScreen(ctx) {
-    return render(<ConfigScreen ctx={ctx} />);
+    return render(<ConfigScreen ctx={ctx} />)
   },
 
   onBoot(ctx) {
-    return handleMaintenanceBannerBoot(ctx);
+    return handleMaintenanceBannerBoot(ctx)
   },
 
   async onBeforeItemsPublish(items, ctx) {
+    const { demoLandingPageModelId, enforceDemoLandingPageLimit } =
+      readParameters(ctx)
+
+    let withinLimit = true
+
+    // Every item is checked, so a bulk publish surfaces all the offenders
+    // rather than stopping at the first one.
     for (const item of items) {
-      const modelId = item.relationships.item_type.data.id;
+      const modelId = item.relationships.item_type.data.id
 
-      if (modelId === DEMO_LANDING_PAGE_MODEL_ID) {
-        const canCreate = await handleDemoLandingPageCreation(ctx, item);
+      if (modelId === demoLandingPageModelId) {
+        const result = await handleDemoLandingPageCreation(ctx, item)
 
-        if (!canCreate) {
-          return true; // For now, allow the save to proceed
+        if (!result.withinLimit) {
+          withinLimit = false
         }
       }
     }
-    return true;
+
+    // Warn-only until an admin turns enforcement on from the config screen.
+    return withinLimit || !enforceDemoLandingPageLimit
   },
 
   overrideFieldExtensions(field: Field, ctx: any) {
-    const modelId = ctx.itemType?.id;
-    
-    if (field.attributes.api_key === MARKETING_FORM_CAMPAIGN) {
+    const { formTemplateModelId, formFieldsBlockApiKey } = readParameters(ctx)
+    const modelId = ctx.itemType?.id
+
+    if (
+      modelId === formTemplateModelId &&
+      field.attributes.api_key === formFieldsBlockApiKey
+    ) {
       return {
-        editor: { id: CAMPAIGN_FIELD_ID },
-      };
+        addons: [{ id: FORM_FIELDS_VALIDATION_ID }]
+      }
     }
 
-    if (modelId === FORM_TEMPLATE_MODEL_ID && field.attributes.api_key === FORM_FIELDS_BLOCK_NAME) {
-      return {
-        addons: [{ id: FORM_FIELDS_VALIDATION_ID }],
-      };
-    }
-    
-    return undefined;
+    return undefined
   },
 
   renderFieldExtension(fieldExtensionId, ctx) {
     switch (fieldExtensionId) {
-      case CAMPAIGN_FIELD_ID:
-        return render(<MarketingFormCampaignField ctx={ctx} />);
-      case FORM_FIELDS_VALIDATION_ID:
-        return render(<FormFieldsValidation ctx={ctx} />);
-      default:
-        return undefined;
+      case FORM_FIELDS_VALIDATION_ID: {
+        return render(<FormFieldsValidation ctx={ctx} />)
+      }
+      default: {
+        return undefined
+      }
     }
   },
 
-  mainNavigationTabs(ctx: any) {
+  mainNavigationTabs(ctx) {
     // `onBoot` only fires once when the plugin's JS boots (full page load),
     // not on DatoCMS's internal SPA navigation, so a user who never
     // hard-reloads could miss the maintenance notice entirely. This hook is
@@ -83,50 +105,92 @@ connect({
     // (handleMaintenanceBannerBoot no-ops once already shown/dismissed).
     // If DatoCMS changes how often this hook is called, this may need
     // revisiting.
-    handleMaintenanceBannerBoot(ctx).catch(() => {});
+    showMaintenanceNotice(ctx)
+
+    const tabs = [
+      {
+        label: 'Maintenance',
+        icon: 'triangle-exclamation' as const,
+        pointsTo: {
+          pageId: MAINTENANCE_PAGE_ID
+        }
+      }
+    ]
+
+    if (!canAccessSearchReplace(ctx)) {
+      return tabs
+    }
 
     return [
       {
-        label: "Forms",
-        icon: "toolbox",
+        label: 'Search & Replace',
+        icon: 'magnifying-glass' as const,
         pointsTo: {
-          pageId: FORMS_PAGE_ID,
-        },
+          pageId: SEARCH_REPLACE_PAGE_ID
+        }
       },
-      {
-        label: "Maintenance",
-        icon: "triangle-exclamation",
-        pointsTo: {
-          pageId: MAINTENANCE_PAGE_ID,
-        },
-      },
-    ];
+      ...tabs
+    ]
   },
 
   renderPage(pageId, ctx) {
     switch (pageId) {
-      case FORMS_PAGE_ID:
-        return render(<FormsPage ctx={ctx} />);
-      case MAINTENANCE_PAGE_ID:
-        return render(<MaintenancePage ctx={ctx} />);
+      case MAINTENANCE_PAGE_ID: {
+        return render(<MaintenancePage ctx={ctx} />)
+      }
+      case SEARCH_REPLACE_PAGE_ID: {
+        // Checked again here: hiding the tab does not stop someone navigating
+        // straight to the page URL.
+        return render(
+          canAccessSearchReplace(ctx) ? (
+            <SearchReplacePage ctx={ctx} />
+          ) : (
+            <AccessDenied ctx={ctx} />
+          )
+        )
+      }
+      default: {
+        return undefined
+      }
     }
   },
 
   itemFormSidebars(model: ItemType, ctx: any) {
+    const { previewBaseUrl, previewModelApiKeys } = readParameters(ctx)
+
+    // Without a base URL the sidebar can only render an empty iframe, so do
+    // not declare it at all — it would otherwise force a blank 900px panel
+    // open on every record.
+    if (!previewBaseUrl) {
+      return []
+    }
+
+    // An empty list means "every model", preserving the previous behaviour.
+    if (
+      previewModelApiKeys.length > 0 &&
+      !previewModelApiKeys.includes(model.attributes.api_key)
+    ) {
+      return []
+    }
+
     return [
       {
-        id: "sideBySidePreview",
-        label: "Live preview",
+        id: PREVIEW_SIDEBAR_ID,
+        label: 'Live preview',
         preferredWidth: 900,
-        startOpen: true,
-      },
-    ];
+        startOpen: true
+      }
+    ]
   },
 
   renderItemFormSidebar(sidebarId, ctx: RenderItemFormSidebarCtx) {
     switch (sidebarId) {
-      case PREVIEW_SIDEBAR_ID:
-        return render(<PreviewSidebar ctx={ctx as any} />);
+      case PREVIEW_SIDEBAR_ID: {
+        return render(<PreviewSidebar ctx={ctx as any} />)
+      }
+      default: {
+        return undefined
+      }
     }
-  },
-});
+  }
+})

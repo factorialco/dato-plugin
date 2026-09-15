@@ -1,19 +1,18 @@
-import { RenderPageCtx } from "datocms-plugin-sdk";
-import { Canvas, Toolbar, ToolbarTitle } from "datocms-react-ui";
-import s from "../styles.module.css";
+import type { RenderPageCtx } from 'datocms-plugin-sdk'
+import { Canvas, Toolbar, ToolbarTitle } from 'datocms-react-ui'
+import s from '../styles.module.css'
+import { readParameters } from '../../lib/pluginParameters'
 import {
   buildBannerText,
-  getMaintenanceWindow,
-  MaintenanceParameters,
-} from "./maintenanceBanner.utils";
+  getMaintenanceWindow
+} from './maintenanceBanner.utils'
 
 export type MaintenancePageProps = {
-  ctx: RenderPageCtx;
-};
+  ctx: RenderPageCtx
+}
 
 export const MaintenancePage = ({ ctx }: MaintenancePageProps) => {
-  const parameters = ctx.plugin.attributes.parameters as MaintenanceParameters;
-  const maintenanceWindow = getMaintenanceWindow(parameters);
+  const maintenanceWindow = getMaintenanceWindow(readParameters(ctx))
 
   return (
     <Canvas ctx={ctx}>
@@ -22,31 +21,36 @@ export const MaintenancePage = ({ ctx }: MaintenancePageProps) => {
           <div>
             <ToolbarTitle>Maintenance</ToolbarTitle>
           </div>
-          <div className={s.info}>Scheduled maintenance banner for this project</div>
+          <div className={s.info}>
+            Scheduled maintenance banner for this project
+          </div>
         </Toolbar>
 
         <div className={s.results}>
           {!ctx.isEnvironmentPrimary && (
             <div className={s.info}>
-              Preview only — the maintenance toast is suppressed outside the primary
-              environment.
+              Preview only — the maintenance toast is suppressed outside the
+              primary environment.
             </div>
           )}
 
-          {!maintenanceWindow ? (
-            <div className={s.noResults}>No maintenance banner currently enabled.</div>
-          ) : (
+          {maintenanceWindow ? (
             <div className={s.resultsList}>
               <div className={s.result}>
                 <div>{buildBannerText(maintenanceWindow)}</div>
                 <div className={s.resultMessage}>
-                  Visible to everyone until it&apos;s disabled from the config screen.
+                  Visible to everyone until it&apos;s disabled from the config
+                  screen.
                 </div>
               </div>
+            </div>
+          ) : (
+            <div className={s.noResults}>
+              No maintenance banner currently enabled.
             </div>
           )}
         </div>
       </div>
     </Canvas>
-  );
-};
+  )
+}
