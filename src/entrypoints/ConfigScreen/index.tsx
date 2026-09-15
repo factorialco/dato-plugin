@@ -8,6 +8,7 @@ import {
   SwitchField,
   TextField
 } from 'datocms-react-ui'
+import PluginHeader from './PluginHeader'
 import type { PluginParameters } from '../../lib/pluginParameters'
 import { DEFAULT_PARAMETERS, readParameters } from '../../lib/pluginParameters'
 
@@ -61,6 +62,8 @@ const ConfigScreen = ({ ctx }: Props) => {
 
   return (
     <Canvas ctx={ctx}>
+      <PluginHeader />
+
       <Form
         onSubmit={(event) => {
           event?.preventDefault()

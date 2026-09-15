@@ -77,6 +77,10 @@ Settings live on the plugin's own details page in DatoCMS (Settings → Plugins 
 
 Every setting except the preview URL falls back to the value the plugin previously hardcoded, so an existing installation keeps working until someone saves the config screen.
 
+### Plugin branding
+
+`datoCmsPlugin.previewImage` and `coverImage` in `package.json` are left empty on purpose: they are only read when a plugin is published to the DatoCMS Marketplace, and the CMA has no image field for a private plugin at all. The settings screen carries the Factorial logo instead, which is the one place editors see the plugin in its own right.
+
 ### Permissions
 
 The plugin declares the [`currentUserAccessToken`](https://www.datocms.com/docs/plugin-sdk/additional-permissions) permission, which it needs to read existing demo landing pages through the Content Management API.
