@@ -40,7 +40,9 @@ type RawField = {
   validators: Record<string, unknown>
 }
 
-const CONCURRENCY = 8
+// DatoCMS rate-limits by requests per second; a handful in flight keeps well
+// under it while still being much faster than serial.
+const CONCURRENCY = 3
 
 /** Runs `task` over `items`, a few at a time, preserving order. */
 const mapWithConcurrency = async <T, R>(
@@ -105,51 +107,111 @@ const toFieldDef = (field: RawField): FieldDef => ({
  * Block fields are needed too: the engine recurses into nested blocks and has
  * to know each one's field types to know what is prose and what is a reference.
  */
+/**
+ * Loads the project's models, and nothing else.
+ *
+ * Field definitions are deliberately not fetched here. A project with several
+ * hundred item types means several hundred `/fields` requests, which DatoCMS
+ * rate-limits — the plugin was firing them all on every load and getting a
+ * wall of 429s back. Fields are loaded on demand instead, by `FieldLoader`,
+ * which in practice touches the handful of types a page actually uses.
+ */
 export const fetchSchemaIndex = async (
   client: Client
 ): Promise<SchemaIndex> => {
   const itemTypes = (await client.itemTypes.list()) as unknown as RawItemType[]
 
-  const fieldLists = await mapWithConcurrency(
-    itemTypes,
-    async (itemType) =>
-      [
-        itemType,
-        (await client.fields.list(itemType.id)) as unknown as RawField[]
-      ] as const
-  )
-
-  const fieldsByItemType: FieldsByItemType = {}
   const namesByItemType: NamesByItemType = {}
   const models: SearchableModel[] = []
 
-  for (const [itemType, fields] of fieldLists) {
-    fieldsByItemType[itemType.id] = fields.map(toFieldDef)
+  for (const itemType of itemTypes) {
     namesByItemType[itemType.id] = itemType.name
 
     if (itemType.modular_block) {
       continue
     }
 
-    const slugField = pickSlugField(fields)
-    const parentField = fields.find(
-      (field) =>
-        field.field_type === 'link' && linksToItemType(field, itemType.id)
-    )
-
     models.push({
       id: itemType.id,
       apiKey: itemType.api_key,
       name: itemType.name,
-      slugFieldApiKey: slugField?.api_key ?? null,
-      slugFieldLocalized: slugField?.localized ?? false,
-      parentFieldApiKey: parentField?.api_key ?? null
+      // Filled in by `loadModelDetails` once a model is actually chosen.
+      slugFieldApiKey: null,
+      slugFieldLocalized: false,
+      parentFieldApiKey: null
     })
   }
 
   models.sort((a, b) => a.name.localeCompare(b.name))
 
-  return { models, fieldsByItemType, namesByItemType }
+  return { models, fieldsByItemType: {}, namesByItemType }
+}
+
+/**
+ * Fetches field definitions on demand, once per item type.
+ *
+ * The walk asks for the types it meets; the caller loads them and walks again.
+ * That keeps the request count proportional to what a page actually contains
+ * rather than to the size of the whole schema.
+ */
+export type FieldLoader = {
+  fieldsByItemType: FieldsByItemType
+  /** Loads any of `ids` not seen yet. Resolves true when something was added. */
+  ensure: (ids: string[]) => Promise<boolean>
+}
+
+export const createFieldLoader = (client: Client): FieldLoader => {
+  const fieldsByItemType: FieldsByItemType = {}
+  const requested = new Set<string>()
+
+  return {
+    fieldsByItemType,
+    ensure: async (ids) => {
+      const missing = ids.filter((id) => id && !requested.has(id))
+
+      if (missing.length === 0) {
+        return false
+      }
+
+      for (const id of missing) {
+        requested.add(id)
+      }
+
+      const loaded = await mapWithConcurrency(missing, async (id) => {
+        const fields = (await client.fields.list(id)) as unknown as RawField[]
+
+        return [id, fields.map(toFieldDef)] as const
+      })
+
+      for (const [id, fields] of loaded) {
+        fieldsByItemType[id] = fields
+      }
+
+      return true
+    }
+  }
+}
+
+/** Slug and parent fields of the chosen model, needed to match URLs to records. */
+export const loadModelDetails = async (
+  client: Client,
+  loader: FieldLoader,
+  model: SearchableModel
+): Promise<SearchableModel> => {
+  await loader.ensure([model.id])
+
+  const fields = (await client.fields.list(model.id)) as unknown as RawField[]
+  const slugField = pickSlugField(fields)
+  const parentField = fields.find(
+    (field) => field.field_type === 'link' && linksToItemType(field, model.id)
+  )
+
+  return {
+    ...model,
+    slugFieldApiKey: slugField?.api_key ?? null,
+    slugFieldLocalized: slugField?.localized ?? false,
+    parentFieldApiKey: parentField?.api_key ?? null
+  }
 }
 
 /**

@@ -162,6 +162,11 @@ export type TransformResult = {
   pendingLinkIds: string[]
   /** Rewritten fields per referenced record, keyed by record id. */
   changedLinkedRecords: Record<string, Record<string, unknown>>
+  /**
+   * Item types the walk met but has no field definitions for. The caller loads
+   * these and walks again, so only the types a page actually uses are fetched.
+   */
+  pendingItemTypeIds: string[]
   /** Blocks that could not be searched, if any. */
   unsearched: UnsearchedBlock[]
   /** Coverage of the walk. */
@@ -188,6 +193,7 @@ type WalkContext = {
   /** Referenced records already loaded, keyed by id. */
   linkedRecords: Record<string, LinkedRecord>
   pendingLinkIds: Set<string>
+  pendingItemTypeIds: Set<string>
   changedLinkedRecords: Record<string, Record<string, unknown>>
   /** Record ids on the current path, so a cycle cannot loop forever. */
   visitedLinkIds: Set<string>
@@ -471,7 +477,15 @@ const walkLinkedRecord = (
     return
   }
 
-  const fields = context.fieldsByItemType[linked.itemTypeId] ?? []
+  const known = context.fieldsByItemType[linked.itemTypeId]
+
+  if (!known) {
+    context.pendingItemTypeIds.add(linked.itemTypeId)
+
+    return
+  }
+
+  const fields = known
   const name = context.namesByItemType[linked.itemTypeId] ?? 'Linked record'
   const linkedPath = [...path, { key: recordId, label: name }]
 
@@ -662,10 +676,14 @@ const walkBlock = (
   }
 
   const itemTypeId = itemTypeIdOf(block)
-  const fields = context.fieldsByItemType[itemTypeId] ?? []
+  const known = context.fieldsByItemType[itemTypeId]
+  const fields = known ?? []
   const blockName = context.namesByItemType[itemTypeId] ?? 'Block'
 
-  if (fields.length === 0) {
+  if (!known) {
+    // Not an error: its definitions simply have not been fetched yet.
+    context.pendingItemTypeIds.add(itemTypeId)
+  } else if (fields.length === 0) {
     context.unsearched.push({
       path: pathLabelOf([...path, { key: itemTypeId, label: blockName }]),
       reason: 'unknown-type'
@@ -975,6 +993,7 @@ export const transformRecord = ({
     report: { blocks: 0, values: 0, skippedFieldTypes: [] },
     linkedRecords,
     pendingLinkIds: new Set(),
+    pendingItemTypeIds: new Set(),
     changedLinkedRecords: {},
     visitedLinkIds: new Set([record.id])
   }
@@ -1015,6 +1034,7 @@ export const transformRecord = ({
     unsearched: context.unsearched,
     report: context.report,
     pendingLinkIds: [...context.pendingLinkIds],
+    pendingItemTypeIds: [...context.pendingItemTypeIds],
     changedLinkedRecords: context.changedLinkedRecords,
     changedFields
   }
