@@ -64,11 +64,24 @@ describe('blocks that cannot be searched', () => {
     ])
   })
 
-  it('reports a block whose type it has no fields for', () => {
-    const { unsearched } = run(PAGE_FIELDS, [
+  // A type whose definitions simply have not been fetched is not an error:
+  // the walk asks for it, the caller loads it, and the walk runs again.
+  it('asks for a block type it has not loaded yet', () => {
+    const { unsearched, pendingItemTypeIds } = run(PAGE_FIELDS, [
       block('b1', FEATURE, { ctas: [] })
     ])
 
+    expect(pendingItemTypeIds).toStrictEqual([FEATURE])
+    expect(unsearched).toStrictEqual([])
+  })
+
+  it('reports a block type that really has no fields', () => {
+    const { unsearched, pendingItemTypeIds } = run(
+      { ...PAGE_FIELDS, [FEATURE]: [] },
+      [block('b1', FEATURE, { ctas: [] })]
+    )
+
+    expect(pendingItemTypeIds).toStrictEqual([])
     expect(unsearched).toStrictEqual([
       { path: 'Sections › Feature Component', reason: 'unknown-type' }
     ])

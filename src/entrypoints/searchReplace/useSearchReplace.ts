@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildClient } from '@datocms/cma-client-browser'
 import type { RenderPageCtx } from 'datocms-plugin-sdk'
 import { readParameters } from '../../lib/pluginParameters'
-import { buildLinkOptions } from './linkTargets'
+import { buildLinkOptions, internalPathOf } from './linkTargets'
 import { urlSearchVariants } from './urlVariants'
 import type {
   LinkConvention,
@@ -15,20 +15,26 @@ import type {
 } from './replaceEngine'
 import { transformRecord } from './replaceEngine'
 import type {
+  FieldLoader,
   FullRecord,
+  PathIndexCache,
   LinkedRecordPayload,
   SchemaIndex,
   SearchableModel
 } from './searchReplace.services'
 import {
+  EMPTY_LINK_RESOLVER,
   MAX_LINK_DEPTH,
   applyToRecord,
   buildLinkResolver,
+  createFieldLoader,
   fetchDatoLocaleByTld,
   fetchLinkedRecords,
   fetchPathIndex,
   fetchRecord,
-  fetchSchemaIndex
+  fetchSchemaIndex,
+  linkTargetModelIds,
+  loadModelDetails
 } from './searchReplace.services'
 import type { ParsedTarget } from './urlTargets'
 import { parseTargets, searchableTargets } from './urlTargets'
@@ -127,6 +133,7 @@ const plural = (count: number, one: string, many = `${one}s`): string =>
  */
 const walkWithLinkedRecords = async (
   client: NonNullable<ReturnType<typeof buildClient>>,
+  loader: FieldLoader,
   input: Omit<Parameters<typeof transformRecord>[0], 'linkedRecords'>
 ): Promise<{
   result: ReturnType<typeof transformRecord>
@@ -134,9 +141,22 @@ const walkWithLinkedRecords = async (
 }> => {
   const linked: Record<string, LinkedRecordPayload> = {}
   const asked = new Set<string>()
-  let result = transformRecord({ ...input, linkedRecords: linked })
 
+  const walk = () =>
+    transformRecord({
+      ...input,
+      fieldsByItemType: loader.fieldsByItemType,
+      linkedRecords: linked
+    })
+
+  let result = walk()
+
+  // Each pass asks for what it could not resolve — field definitions for the
+  // types it met, and the records it was pointed at — so only what a page
+  // actually contains is ever fetched.
   for (let depth = 0; depth < MAX_LINK_DEPTH; depth += 1) {
+    const loadedTypes = await loader.ensure(result.pendingItemTypeIds)
+
     const missing: string[] = []
 
     for (const id of result.pendingLinkIds) {
@@ -146,12 +166,15 @@ const walkWithLinkedRecords = async (
       }
     }
 
-    if (missing.length === 0) {
+    if (!loadedTypes && missing.length === 0) {
       break
     }
 
-    Object.assign(linked, await fetchLinkedRecords(client, missing))
-    result = transformRecord({ ...input, linkedRecords: linked })
+    if (missing.length > 0) {
+      Object.assign(linked, await fetchLinkedRecords(client, missing))
+    }
+
+    result = walk()
   }
 
   return { result, linked }
@@ -211,6 +234,15 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       environment: ctx.environment
     })
   }, [ctx.currentUserAccessToken, ctx.environment])
+
+  // Cached for the life of the client, so a second scan re-fetches nothing.
+  const fieldLoader = useMemo(
+    () => (client ? createFieldLoader(client) : null),
+    [client]
+  )
+
+  // Path indexes are the heaviest thing a scan builds, so they outlive it.
+  const pathIndexCache = useRef<PathIndexCache>(new Map())
 
   const siteLocales = useMemo(() => ctx.site.attributes.locales, [ctx.site])
 
@@ -310,7 +342,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     searchableTargets(targets).length > 0
 
   const scan = useCallback(async () => {
-    if (!client || !schema || !model) {
+    if (!client || !schema || !model || !fieldLoader) {
       return
     }
 
@@ -320,13 +352,33 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     setStage(`Indexing ${model.name} records…`)
 
     try {
+      const searchableModel = await loadModelDetails(client, fieldLoader, model)
       const searchable = searchableTargets(targets)
       const locales = [
         ...new Set(searchable.map((target) => target.datoLocale as string))
       ]
+      // Only a URL search can match a reference, and building the resolver
+      // means indexing every model a link can point at — so it is skipped
+      // entirely for a plain text search.
+      const needsLinkResolver = internalPathOf(options.find) !== null
+
       const [pathIndex, linkResolver] = await Promise.all([
-        fetchPathIndex(client, model, locales),
-        buildLinkResolver(client, schema, locales)
+        fetchPathIndex(client, searchableModel, locales),
+        needsLinkResolver
+          ? buildLinkResolver(
+              client,
+              fieldLoader,
+              schema,
+              [
+                searchableModel.id,
+                ...linkTargetModelIds(fieldLoader.fieldsByItemType, [
+                  searchableModel.id
+                ])
+              ],
+              locales,
+              pathIndexCache.current
+            )
+          : Promise.resolve(EMPTY_LINK_RESOLVER)
       ])
 
       // Links stored as record references render as a URL but hold an id, so
@@ -385,7 +437,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
           const {
             result: { matches, unsearched, report },
             linked
-          } = await walkWithLinkedRecords(client, {
+          } = await walkWithLinkedRecords(client, fieldLoader, {
             record,
             itemTypeId: model.id,
             fieldsByItemType: schema.fieldsByItemType,
@@ -458,6 +510,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     }
   }, [
     client,
+    fieldLoader,
     schema,
     model,
     targets,
