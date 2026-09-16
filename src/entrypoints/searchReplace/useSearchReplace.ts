@@ -292,9 +292,46 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     }
   }, [client])
 
-  const model = useMemo<SearchableModel | null>(
+  const [modelDetails, setModelDetails] = useState<SearchableModel | null>(null)
+
+  const baseModel = useMemo<SearchableModel | null>(
     () => schema?.models.find((candidate) => candidate.id === modelId) ?? null,
     [schema, modelId]
+  )
+
+  // The chosen model's slug field decides whether URLs can be matched at all,
+  // so it is looked up as soon as one is chosen rather than at scan time —
+  // otherwise the form cannot say whether the model is usable. Nothing is
+  // cleared on the way out: `model` below falls back to the undetailed entry
+  // whenever the details belong to a different model.
+  useEffect(() => {
+    if (!client || !fieldLoader || !baseModel) {
+      return
+    }
+
+    let cancelled = false
+
+    ;(async () => {
+      try {
+        const detailed = await loadModelDetails(client, fieldLoader, baseModel)
+
+        if (!cancelled) {
+          setModelDetails(detailed)
+        }
+      } catch {
+        // Leaving the details unchecked keeps the form neutral rather than
+        // claiming the model has no slug field.
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [client, fieldLoader, baseModel])
+
+  const model = useMemo<SearchableModel | null>(
+    () => (modelDetails?.id === baseModel?.id ? modelDetails : baseModel),
+    [modelDetails, baseModel]
   )
 
   const targets = useMemo(
@@ -338,7 +375,13 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
   const canScan =
     phase !== 'scanning' &&
     phase !== 'applying' &&
-    Boolean(client && schema && model?.slugFieldApiKey && find) &&
+    Boolean(
+      client &&
+      schema &&
+      model?.slugFieldChecked &&
+      model.slugFieldApiKey &&
+      find
+    ) &&
     searchableTargets(targets).length > 0
 
   const scan = useCallback(async () => {
@@ -352,7 +395,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     setStage(`Indexing ${model.name} records…`)
 
     try {
-      const searchableModel = await loadModelDetails(client, fieldLoader, model)
+      const searchableModel = model.slugFieldChecked
+        ? model
+        : await loadModelDetails(client, fieldLoader, model)
       const searchable = searchableTargets(targets)
       const locales = [
         ...new Set(searchable.map((target) => target.datoLocale as string))
