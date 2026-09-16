@@ -423,12 +423,15 @@ export const EMPTY_LINK_RESOLVER: LinkResolver = {
   recordAt: () => null
 }
 
-/** Every model a `link` / `links` field in this schema can point at. */
-const linkTargetModelIds = (schema: SchemaIndex): string[] => {
+/** Models the given item types can point a `link` / `links` field at. */
+export const linkTargetModelIds = (
+  fieldsByItemType: FieldsByItemType,
+  itemTypeIds: string[]
+): string[] => {
   const targets = new Set<string>()
 
-  for (const fields of Object.values(schema.fieldsByItemType)) {
-    for (const field of fields) {
+  for (const itemTypeId of itemTypeIds) {
+    for (const field of fieldsByItemType[itemTypeId] ?? []) {
       if (field.fieldType !== 'link' && field.fieldType !== 'links') {
         continue
       }
@@ -442,24 +445,56 @@ const linkTargetModelIds = (schema: SchemaIndex): string[] => {
   return [...targets]
 }
 
+/** Path indexes are expensive to build, so one is kept per model per client. */
+export type PathIndexCache = Map<string, PathIndex>
+
 /**
- * Builds the resolver by indexing every model that links can point at.
+ * Builds the resolver over the models that can actually be pointed at.
  *
- * Only models with a slug field are indexed: without one there is no path to
- * resolve to, and a reference to such a record can never match a URL.
+ * Slug fields are read from the loader rather than from `SearchableModel`,
+ * whose slug details are only filled in for the model being searched — every
+ * other one would look slug-less and be skipped, leaving the resolver empty.
+ *
+ * Only models reachable as link targets are indexed, and each index is cached,
+ * so scanning twice costs nothing the second time.
  */
 export const buildLinkResolver = async (
   client: Client,
+  loader: FieldLoader,
   schema: SchemaIndex,
-  locales: string[]
+  candidateModelIds: string[],
+  locales: string[],
+  cache: PathIndexCache
 ): Promise<LinkResolver> => {
-  const targets = schema.models.filter(
-    (model) =>
-      model.slugFieldApiKey && linkTargetModelIds(schema).includes(model.id)
-  )
+  await loader.ensure(candidateModelIds)
+
+  const targets = schema.models.filter((model) => {
+    if (!candidateModelIds.includes(model.id)) {
+      return false
+    }
+
+    const fields = loader.fieldsByItemType[model.id] ?? []
+
+    return fields.some(
+      (field) => field.fieldType === 'slug' || field.apiKey === 'slug'
+    )
+  })
 
   const indexes = await Promise.all(
-    targets.map((model) => fetchPathIndex(client, model, locales))
+    targets.map(async (model) => {
+      const cached = cache.get(model.id)
+
+      if (cached) {
+        return cached
+      }
+
+      const detailed = await loadModelDetails(client, loader, model)
+      const index = await fetchPathIndex(client, detailed, locales)
+
+      cache.set(model.id, index)
+
+      return index
+    })
   )
 
   // locale -> path -> record id, and its inverse.
