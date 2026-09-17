@@ -61,17 +61,6 @@ const OPTIONS: MatchOptions = {
   wholeWord: false
 }
 
-const RESOLVER = {
-  pathOf: (recordId: string) =>
-    recordId === PRICING_ID
-      ? '/pricing'
-      : recordId === PLANS_ID
-        ? '/plans'
-        : null,
-  recordAt: (path: string) =>
-    path === '/pricing' ? PRICING_ID : path === '/plans' ? PLANS_ID : null
-}
-
 const CONVENTION = {
   linkTypeApiKey: 'link_type',
   externalTypeValue: 'external',
@@ -82,7 +71,8 @@ const linkOptions = (over: Partial<LinkOptions> = {}): LinkOptions => ({
   findPath: '/pricing',
   replacePath: '/plans',
   replaceUrl: 'https://factorialhr.com/plans',
-  resolver: RESOLVER,
+  findRecordId: PRICING_ID,
+  replaceRecordId: PLANS_ID,
   convention: CONVENTION,
   ...over
 })
@@ -155,6 +145,7 @@ describe('reference links', () => {
   it('converts to an external link when nothing matches the replacement', () => {
     const external = linkOptions({
       replacePath: null,
+      replaceRecordId: null,
       replaceUrl: 'https://trust.factorial.co/'
     })
     const { matches } = run(external)
@@ -174,6 +165,7 @@ describe('reference links', () => {
     // `topic` sits on the record, which has no link_type/external_url pair.
     const external = linkOptions({
       replacePath: null,
+      replaceRecordId: null,
       replaceUrl: 'https://trust.factorial.co/'
     })
     const topic = run(external).matches.find((match) => match.path === 'Topic')
@@ -185,6 +177,7 @@ describe('reference links', () => {
   it('leaves an unapplicable reference alone even when selected', () => {
     const external = linkOptions({
       replacePath: null,
+      replaceRecordId: null,
       replaceUrl: 'https://trust.factorial.co/'
     })
     const { matches } = run(external)
@@ -197,7 +190,10 @@ describe('reference links', () => {
   })
 
   it('ignores references pointing somewhere else', () => {
-    const elsewhere = linkOptions({ findPath: '/careers' })
+    const elsewhere = linkOptions({
+      findPath: '/careers',
+      findRecordId: 'rec-careers'
+    })
 
     expect(run(elsewhere).matches).toHaveLength(0)
   })

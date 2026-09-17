@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { buildClient } from '@datocms/cma-client-browser'
 import type { RenderPageCtx } from 'datocms-plugin-sdk'
 import { readParameters } from '../../lib/pluginParameters'
 import { buildLinkOptions, internalPathOf } from './linkTargets'
+import { createRecordPathFinder } from './recordPaths'
 import { urlSearchVariants } from './urlVariants'
 import type {
   LinkConvention,
@@ -16,23 +17,18 @@ import { transformRecord } from './replaceEngine'
 import type {
   FieldLoader,
   FullRecord,
-  PathIndexCache,
   LinkedRecordPayload,
   SchemaIndex,
   SearchableModel
 } from './searchReplace.services'
 import {
-  EMPTY_LINK_RESOLVER,
   MAX_RESOLVE_PASSES,
   applyToRecord,
-  buildLinkResolver,
   createFieldLoader,
   fetchDatoLocaleByTld,
   fetchLinkedRecords,
-  fetchPathIndex,
   fetchRecord,
   fetchSchemaIndex,
-  linkTargetModelIds,
   loadModelDetails
 } from './searchReplace.services'
 import type { ParsedTarget } from './urlTargets'
@@ -125,15 +121,17 @@ const walkWithLinkedRecords = async (
   input: Omit<
     Parameters<typeof transformRecord>[0],
     'linkedRecords' | 'fieldsByItemType'
-  >
+  >,
+  /** Records the scan already fetched, so applying does not fetch them again. */
+  seed: Record<string, LinkedRecordPayload> = {}
 ): Promise<{
   result: ReturnType<typeof transformRecord>
   linked: Record<string, LinkedRecordPayload>
   /** True when the walk stopped at the cap with work still outstanding. */
   exhausted: boolean
 }> => {
-  const linked: Record<string, LinkedRecordPayload> = {}
-  const asked = new Set<string>()
+  const linked: Record<string, LinkedRecordPayload> = { ...seed }
+  const asked = new Set<string>(Object.keys(seed))
 
   const walk = () =>
     transformRecord({
@@ -241,9 +239,6 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     () => (client ? createFieldLoader(client) : null),
     [client]
   )
-
-  // Path indexes are the heaviest thing a scan builds, so they outlive it.
-  const pathIndexCache = useRef<PathIndexCache>(new Map())
 
   const siteLocales = useMemo(() => ctx.site.attributes.locales, [ctx.site])
 
@@ -403,28 +398,21 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       const locales = [
         ...new Set(searchable.map((target) => target.datoLocale as string))
       ]
-      // Only a URL search can match a reference, and building the resolver
-      // means indexing every model a link can point at — so it is skipped
-      // entirely for a plain text search.
-      const needsLinkResolver = internalPathOf(options.find) !== null
+      const pathFinder = createRecordPathFinder(client, searchableModel)
 
-      const [pathIndex, linkResolver] = await Promise.all([
-        fetchPathIndex(client, searchableModel, locales),
-        needsLinkResolver
-          ? buildLinkResolver(
-              client,
-              fieldLoader,
-              schema,
-              [
-                searchableModel.id,
-                ...linkTargetModelIds(fieldLoader.fieldsByItemType, [
-                  searchableModel.id
-                ])
-              ],
-              locales,
-              pathIndexCache.current
-            )
-          : Promise.resolve(EMPTY_LINK_RESOLVER)
+      // The two URLs are resolved to records once, rather than every record's
+      // path being resolved so one of them can be recognised.
+      const findPath = internalPathOf(options.find)
+      const replacePath = internalPathOf(options.replace)
+      const primaryLocale = searchable[0]?.datoLocale ?? locales[0] ?? null
+
+      const [findRecordId, replaceRecordId] = await Promise.all([
+        findPath && primaryLocale
+          ? pathFinder.recordAt(findPath, primaryLocale)
+          : Promise.resolve(null),
+        replacePath && primaryLocale
+          ? pathFinder.recordAt(replacePath, primaryLocale)
+          : Promise.resolve(null)
       ])
 
       // Links stored as record references render as a URL but hold an id, so
@@ -433,7 +421,8 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       const link: LinkOptions | null = buildLinkOptions({
         find: options.find,
         replace: options.replace,
-        resolver: linkResolver,
+        findRecordId,
+        replaceRecordId,
         convention: linkConvention
       })
 
@@ -458,9 +447,10 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
           continue
         }
 
-        const recordId = pathIndex
-          .get(target.datoLocale as string)
-          ?.get(target.contentPath as string)
+        const recordId = await pathFinder.recordAt(
+          target.contentPath as string,
+          target.datoLocale as string
+        )
 
         if (!recordId) {
           scanned.push({
@@ -622,15 +612,20 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
         try {
           const {
             result: { changedFields, changedLinkedRecords }
-          } = await walkWithLinkedRecords(client, fieldLoader, {
-            record: row.record,
-            itemTypeId: model.id,
-            namesByItemType: schema.namesByItemType,
-            options,
-            locale: row.target.datoLocale,
-            link: linkOptions,
-            enabledKeys
-          })
+          } = await walkWithLinkedRecords(
+            client,
+            fieldLoader,
+            {
+              record: row.record,
+              itemTypeId: model.id,
+              namesByItemType: schema.namesByItemType,
+              options,
+              locale: row.target.datoLocale,
+              link: linkOptions,
+              enabledKeys
+            },
+            row.linked
+          )
 
           const changedRecordCount =
             Object.keys(changedLinkedRecords).length +

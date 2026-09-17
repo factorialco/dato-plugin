@@ -1,5 +1,5 @@
 import { contentPathFor, normalizePath, resolveMarket } from './marketLocale'
-import type { LinkConvention, LinkOptions, LinkResolver } from './replaceEngine'
+import type { LinkConvention, LinkOptions } from './replaceEngine'
 
 /**
  * The path inside this project that a find/replace value points at, or null
@@ -40,12 +40,14 @@ export const internalPathOf = (value: string): string | null => {
 export const buildLinkOptions = ({
   find,
   replace,
-  resolver,
+  findRecordId,
+  replaceRecordId,
   convention
 }: {
   find: string
   replace: string
-  resolver: LinkResolver
+  findRecordId: string | null
+  replaceRecordId: string | null
   convention: LinkConvention
 }): LinkOptions | null => {
   const findPath = internalPathOf(find)
@@ -58,7 +60,8 @@ export const buildLinkOptions = ({
     findPath,
     replacePath: internalPathOf(replace),
     replaceUrl: replace.trim(),
-    resolver,
+    findRecordId,
+    replaceRecordId,
     convention
   }
 }

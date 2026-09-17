@@ -62,12 +62,6 @@ export type MatchOptions = {
   variants?: SearchVariant[]
 }
 
-/** Resolves record references to the URL path the site renders them as. */
-export type LinkResolver = {
-  pathOf: (recordId: string, locale: string) => string | null
-  recordAt: (path: string, locale: string) => string | null
-}
-
 /** Field names a link block uses to say "internal or external, and where". */
 export type LinkConvention = {
   linkTypeApiKey: string
@@ -84,13 +78,21 @@ export type LinkConvention = {
  * the one shape that can express an address outside the project.
  */
 export type LinkOptions = {
-  /** Path being searched for, e.g. `/pricing`. */
+  /** Path being searched for, e.g. `/pricing`. Shown in the report. */
   findPath: string
   /** Path of the replacement, when it is one this project can resolve. */
   replacePath: string | null
   /** The replacement as an absolute URL, for the external fallback. */
   replaceUrl: string
-  resolver: LinkResolver
+  /**
+   * The records those paths resolve to, looked up once before the walk.
+   *
+   * A reference matches by holding this id — not by having its own path
+   * resolved and compared, which would mean indexing every record a link
+   * could point at just to answer one question.
+   */
+  findRecordId: string | null
+  replaceRecordId: string | null
   convention: LinkConvention
 }
 
@@ -367,13 +369,11 @@ const walkLinkField = (
     return false
   }
 
-  if (link.resolver.pathOf(current, locale) !== link.findPath) {
+  if (!link.findRecordId || current !== link.findRecordId) {
     return false
   }
 
-  const target = link.replacePath
-    ? link.resolver.recordAt(link.replacePath, locale)
-    : null
+  const target = link.replaceRecordId
 
   const linkTypeField = siblings.find(
     (sibling) => sibling.apiKey === link.convention.linkTypeApiKey
