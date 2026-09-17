@@ -98,9 +98,16 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
                 {state.progress.done}
                 {' / '}
                 {state.progress.total}
+                {state.phase === 'scanning' &&
+                  ` · ${state.foundSoFar} occurrence(s) so far`}
               </>
             ) : (
               (state.stage ?? 'Working…')
+            )}
+            {state.phase === 'scanning' && (
+              <Button buttonSize='xxs' onClick={state.handleCancelScan}>
+                Stop
+              </Button>
             )}
           </div>
         )}
@@ -134,6 +141,17 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
               </div>
               <div className={s.actions}>
                 <SwitchField
+                  name='onlyMatches'
+                  id='onlyMatches'
+                  label='Only pages with matches'
+                  value={state.onlyMatches}
+                  onChange={state.handleOnlyMatchesChange}
+                  switchInputProps={{
+                    name: 'onlyMatches',
+                    value: state.onlyMatches
+                  }}
+                />
+                <SwitchField
                   name='publish'
                   id='publish'
                   label='Republish already-published pages'
@@ -161,11 +179,12 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
               </div>
             </ToolbarStack>
 
-            {state.rows.map((row, index) => (
+            {state.visibleRows.map((row, index) => (
               <ResultRow
                 key={`${index}-${row.target.raw}`}
                 row={row}
                 selectedKeys={state.selectedKeys}
+                duplicateKeys={state.duplicateKeys}
                 // Stale results must not be applied per-row either.
                 busy={busy || state.resultsStale}
                 onToggleKey={state.handleToggleKey}

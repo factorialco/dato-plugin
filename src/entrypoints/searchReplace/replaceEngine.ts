@@ -100,6 +100,15 @@ export type LinkOptions = {
 export type Match = {
   /** Stable across dry run and apply. */
   key: string
+  /**
+   * Identity of the stored value itself, independent of the page it was
+   * reached through.
+   *
+   * A shared component is reached from every page that uses it, so one stored
+   * value shows up under many pages. This is what says they are the same
+   * value — and therefore one edit, not many.
+   */
+  valueKey: string
   recordId: string
   /** Breadcrumb of the value's position, e.g. `Sections › Hero › Body`. */
   path: string
@@ -185,7 +194,14 @@ export type TransformResult = {
   changedFields: Record<string, unknown>
 }
 
-type PathSegment = { key: string; label: string }
+type PathSegment = {
+  key: string
+  label: string
+  /** The locale of a localized field, shown beside the path rather than in it. */
+  locale?: boolean
+  /** A block or referenced record, as opposed to the field that led to it. */
+  entity?: boolean
+}
 
 type WalkContext = {
   recordId: string
@@ -215,6 +231,12 @@ type WalkContext = {
    * reference to it.
    */
   walkedLinkIds: Set<string>
+  /**
+   * How much of the current path belongs to the page rather than to the record
+   * the value actually lives in. Everything past it identifies the value
+   * within its own record.
+   */
+  recordPathDepth: number
   /** Null when the search is not for a URL, so references cannot match. */
   link: LinkOptions | null
   matches: Match[]
@@ -331,11 +353,44 @@ const buildSnippet = (
 const pathKeyOf = (path: PathSegment[]): string =>
   path.map((segment) => segment.key).join('/')
 
-const pathLabelOf = (path: PathSegment[]): string =>
-  path
-    .map((segment) => segment.label)
-    .filter((label) => label.length > 0)
-    .join(' › ')
+/**
+ * The breadcrumb a reader sees.
+ *
+ * Two things are dropped because they say nothing. Locale segments are
+ * excluded — the locale is shown once beside the path, and repeating it at
+ * every localized field on the way down was most of the length. And a record
+ * whose name repeats the field that led to it is collapsed: "Sections Block ›
+ * Sections Block" reads as one step.
+ *
+ * Only that pairing is collapsed, never two records in a row — a block nested
+ * inside another of the same kind is real nesting, and flattening it would
+ * hide where the value actually sits.
+ *
+ * Only labels are affected. Occurrence keys are built from segment keys, so
+ * they are unchanged and stay valid between the dry run and applying.
+ */
+const pathLabelOf = (path: PathSegment[]): string => {
+  const labels: string[] = []
+
+  let previous: PathSegment | null = null
+
+  for (const segment of path) {
+    if (segment.label.length === 0 || segment.locale) {
+      continue
+    }
+
+    const repeatsItsField =
+      segment.entity && !previous?.entity && previous?.label === segment.label
+
+    if (!repeatsItsField) {
+      labels.push(segment.label)
+    }
+
+    previous = segment
+  }
+
+  return labels.join(' › ')
+}
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -397,6 +452,9 @@ const walkLinkField = (
 
   context.matches.push({
     key,
+    valueKey: `${context.recordId}|${pathKeyOf(
+      fieldPath.slice(context.recordPathDepth)
+    )}|link`,
     recordId: context.recordId,
     path: pathLabelOf(fieldPath),
     locale,
@@ -503,13 +561,17 @@ const walkLinkedRecord = (
 
   const fields = known
   const name = context.namesByItemType[linked.itemTypeId] ?? 'Linked record'
-  const linkedPath = [...path, { key: recordId, label: name }]
+  const linkedPath = [...path, { key: recordId, label: name, entity: true }]
 
   // Marked before walking, so a record that references itself — directly or
   // round a longer loop — stops here.
   context.walkedLinkIds.add(recordId)
 
-  const nested: WalkContext = { ...context, recordId }
+  const nested: WalkContext = {
+    ...context,
+    recordId,
+    recordPathDepth: linkedPath.length
+  }
 
   const values = { ...linked.values }
   let changed = false
@@ -615,9 +677,13 @@ const walkString = (
 
   occurrences.forEach(({ start, end, replace }, index) => {
     const key = `${context.recordId}|${pathKey}|${index}`
+    const valueKey = `${context.recordId}|${pathKeyOf(
+      path.slice(context.recordPathDepth)
+    )}|${index}`
 
     context.matches.push({
       key,
+      valueKey,
       recordId: context.recordId,
       path: pathLabel,
       locale: context.locale,
@@ -705,7 +771,10 @@ const walkBlock = (
       reason: 'unknown-type'
     })
   }
-  const blockPath = [...path, { key: block.id ?? itemTypeId, label: blockName }]
+  const blockPath = [
+    ...path,
+    { key: block.id ?? itemTypeId, label: blockName, entity: true }
+  ]
 
   context.report.blocks += 1
 
@@ -945,7 +1014,7 @@ function walkField(
     const walked = walkByFieldType(
       value[locale],
       field.fieldType,
-      [...fieldPath, { key: locale, label: locale }],
+      [...fieldPath, { key: locale, label: locale, locale: true }],
       { ...context, locale }
     )
 
@@ -1015,6 +1084,7 @@ export const transformRecord = ({
     pendingLinkIds: new Set(),
     pendingItemTypeIds: new Set(),
     changedLinkedRecords: {},
+    recordPathDepth: 0,
     walkedLinkIds: new Set([record.id])
   }
 

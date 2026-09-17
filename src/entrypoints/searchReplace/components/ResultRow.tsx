@@ -61,6 +61,7 @@ const rowSubtitle = (row: ScanRow): string => {
 type MatchLineProps = {
   match: Match
   selected: boolean
+  duplicate: boolean
   disabled: boolean
   onToggle: (key: string) => void
   onEditRecord: (recordId: string) => void
@@ -69,6 +70,7 @@ type MatchLineProps = {
 const MatchLine = ({
   match,
   selected,
+  duplicate,
   disabled,
   onToggle,
   onEditRecord
@@ -97,6 +99,11 @@ const MatchLine = ({
         {match.suffix}
       </div>
       {match.note && <div className={s.matchNote}>{match.note}</div>}
+      {duplicate && (
+        <div className={s.matchPath}>
+          Same value as an earlier page — editing it once covers both
+        </div>
+      )}
     </div>
     {/* A match usually sits in a record the page merely points at, so the
         page's own Open button does not lead to it. */}
@@ -109,6 +116,8 @@ const MatchLine = ({
 export type ResultRowProps = {
   row: ScanRow
   selectedKeys: Set<string>
+  /** Matches repeating a value an earlier row already covers. */
+  duplicateKeys: Set<string>
   busy: boolean
   onToggleKey: (key: string) => void
   onToggleRow: (row: ScanRow, selected: boolean) => void
@@ -120,6 +129,7 @@ export type ResultRowProps = {
 export const ResultRow = ({
   row,
   selectedKeys,
+  duplicateKeys,
   busy,
   onToggleKey,
   onToggleRow,
@@ -212,6 +222,7 @@ export const ResultRow = ({
             key={match.key}
             match={match}
             selected={selectedKeys.has(match.key)}
+            duplicate={duplicateKeys.has(match.key)}
             disabled={busy}
             onToggle={onToggleKey}
             onEditRecord={onEditRecord}

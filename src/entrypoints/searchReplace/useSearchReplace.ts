@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildClient } from '@datocms/cma-client-browser'
 import type { RenderPageCtx } from 'datocms-plugin-sdk'
 import { readParameters } from '../../lib/pluginParameters'
@@ -28,8 +28,12 @@ import {
   fetchDatoLocaleByTld,
   fetchLinkedRecords,
   fetchModelRecordStubs,
-  fetchRecord,
+  fetchRecordsByIds,
   fetchSchemaIndex,
+  SCAN_BATCH,
+  SCAN_PARALLEL,
+  chunked,
+  mapWithLimit,
   loadModelDetails
 } from './searchReplace.services'
 import type { ParsedTarget } from './urlTargets'
@@ -114,6 +118,50 @@ export type SearchScope = 'pages' | 'all'
  */
 const LARGE_SCAN = 200
 
+/**
+ * Occurrences worth selecting: everything rewritable, minus repeats of a value
+ * already covered by an earlier row.
+ *
+ * A shared component is reached from every page that uses it, so one stored
+ * value appears under many pages. Selecting it once is the honest count, and
+ * keeps "Apply all" from queueing the same edit over and over.
+ */
+const selectableKeys = (rows: ScanRow[]): Set<string> => {
+  const seen = new Set<string>()
+  const keys = new Set<string>()
+
+  for (const row of rows) {
+    for (const match of row.matches) {
+      if (!match.applicable || seen.has(match.valueKey)) {
+        continue
+      }
+
+      seen.add(match.valueKey)
+      keys.add(match.key)
+    }
+  }
+
+  return keys
+}
+
+/** Values already covered by an earlier row, so repeats can be labelled. */
+export const duplicateValueKeys = (rows: ScanRow[]): Set<string> => {
+  const seen = new Set<string>()
+  const repeats = new Set<string>()
+
+  for (const row of rows) {
+    for (const match of row.matches) {
+      if (seen.has(match.valueKey)) {
+        repeats.add(match.key)
+      } else {
+        seen.add(match.valueKey)
+      }
+    }
+  }
+
+  return repeats
+}
+
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
@@ -150,7 +198,11 @@ const walkWithLinkedRecords = async (
   /** True when the walk stopped at the cap with work still outstanding. */
   exhausted: boolean
 }> => {
-  const linked: Record<string, LinkedRecordPayload> = { ...seed }
+  // The seed is used directly rather than copied, so a caller can hand the
+  // same cache to every record in a scan. Pages share components — a nav, a
+  // footer, a CTA used everywhere — and fetching those once per page was most
+  // of the cost of scanning a whole model.
+  const linked = seed
   const asked = new Set<string>(Object.keys(seed))
 
   const walk = () =>
@@ -237,9 +289,14 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
   const [rows, setRows] = useState<ScanRow[]>([])
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [onlyMatches, setOnlyMatches] = useState(false)
   const [scope, setScope] = useState<SearchScope>('pages')
   const [scopeLocale, setScopeLocale] = useState<string | null>(null)
   const [linkOptions, setLinkOptions] = useState<LinkOptions | null>(null)
+  // A ref rather than state: the scan loop reads it between records, and must
+  // see the change the click made rather than the value it closed over.
+  const scanCancelled = useRef(false)
+  const [foundSoFar, setFoundSoFar] = useState(0)
   const [progress, setProgress] = useState<{
     done: number
     total: number
@@ -418,7 +475,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       return
     }
 
+    scanCancelled.current = false
     setPhase('scanning')
+    setFoundSoFar(0)
     setRows([])
     setSelectedKeys(new Set())
     setStage(`Indexing ${model.name} records…`)
@@ -557,28 +616,39 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
       const scanned: ScanRow[] = [...scanned0]
 
+      // One cache of referenced records for the whole scan.
+      const sharedLinked: Record<string, LinkedRecordPayload> = {}
+
       // The one place a record is walked, whichever scope chose it.
       const scanOne = async (
         target: ParsedTarget,
         recordId: string,
-        into: ScanRow[]
-      ): Promise<void> => {
+        record: FullRecord
+      ): Promise<ScanRow> => {
         try {
-          const record = await fetchRecord(client, recordId)
           const {
             result: { matches, unsearched, report },
             linked,
             exhausted
-          } = await walkWithLinkedRecords(client, fieldLoader, {
-            record,
-            itemTypeId: model.id,
-            namesByItemType: schema.namesByItemType,
-            options,
-            locale: target.datoLocale,
-            link
-          })
+          } = await walkWithLinkedRecords(
+            client,
+            fieldLoader,
+            {
+              record,
+              itemTypeId: model.id,
+              namesByItemType: schema.namesByItemType,
+              options,
+              locale: target.datoLocale,
+              link
+            },
+            sharedLinked
+          )
 
-          into.push({
+          if (matches.length > 0) {
+            setFoundSoFar((current) => current + matches.length)
+          }
+
+          return {
             target,
             status: matches.length > 0 ? 'matched' : 'no-matches',
             recordId,
@@ -589,9 +659,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             message: exhausted
               ? `Stopped before the page was fully resolved — results may be incomplete (${report.values} value(s) in ${report.blocks} block(s))`
               : describeScan(unsearched, report, matches.length > 0)
-          })
+          }
         } catch (error) {
-          into.push({
+          return {
             target,
             status: 'error',
             recordId,
@@ -600,32 +670,68 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             written: [],
             matches: [],
             message: errorMessage(error)
-          })
+          }
+        } finally {
+          setProgress((current) =>
+            current ? { ...current, done: current.done + 1 } : current
+          )
         }
-
-        setProgress((current) =>
-          current ? { ...current, done: current.done + 1 } : current
-        )
       }
 
-      for (const planned of plan) {
-        if (planned.recordId) {
-          await scanOne(planned.target, planned.recordId, scanned)
+      // Records are fetched a batch at a time and then walked in parallel.
+      // Scanning fifteen hundred pages one after another spent almost all of
+      // its time waiting: one request to fetch, then a walk that waits on its
+      // own requests, then the next page.
+      for (const batch of chunked(plan, SCAN_BATCH)) {
+        // Checked per batch rather than per record: a batch is one request
+        // that is already in flight by the time anyone clicks.
+        if (scanCancelled.current) {
+          break
         }
+
+        const fetched = await fetchRecordsByIds(
+          client,
+          batch
+            .map((planned) => planned.recordId)
+            .filter((id): id is string => id !== null)
+        )
+
+        const walked = await mapWithLimit(
+          batch,
+          SCAN_PARALLEL,
+          async (planned) =>
+            planned.recordId && fetched[planned.recordId]
+              ? await scanOne(
+                  planned.target,
+                  planned.recordId,
+                  fetched[planned.recordId]
+                )
+              : null
+        )
+
+        for (const row of walked) {
+          if (row) {
+            scanned.push(row)
+          }
+        }
+
+        // Shown as they arrive: on a whole-model scan the last page can be
+        // minutes after the first, and there is no reason to withhold results
+        // that are already final.
+        setRows([...scanned])
+        setSelectedKeys(
+          new Set(
+            scanned.flatMap((row) =>
+              row.matches
+                .filter((match) => match.applicable)
+                .map((match) => match.key)
+            )
+          )
+        )
       }
 
       setRows(scanned)
-      setSelectedKeys(
-        // Only what can actually be rewritten: a reference the replacement
-        // cannot be expressed as is reported, not selected.
-        new Set(
-          scanned.flatMap((row) =>
-            row.matches
-              .filter((match) => match.applicable)
-              .map((match) => match.key)
-          )
-        )
-      )
+      setSelectedKeys(selectableKeys(scanned))
       setPhase('reviewing')
       setScannedSignature(scanSignature)
 
@@ -663,6 +769,17 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     scanSignature,
     linkConvention
   ])
+
+  /**
+   * Stops a scan between records.
+   *
+   * Whatever was searched before the stop is kept: those rows are complete,
+   * and a mistyped search term over a large model should not mean waiting for
+   * it to finish or reloading the page.
+   */
+  const cancelScan = useCallback(() => {
+    scanCancelled.current = true
+  }, [])
 
   const toggleKey = useCallback((key: string) => {
     setSelectedKeys((current) => {
@@ -703,6 +820,12 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
       let applied = 0
       let failed = 0
+
+      // A component used across the site is reached from every page that uses
+      // it, so the same record turns up in many rows. It only has to be
+      // written once — and writing it twice would fail anyway, since the
+      // second attempt still carries the version read before the first.
+      const alreadyWritten = new Map<string, { published: boolean }>()
 
       for (const row of toApply) {
         const enabledKeys = new Set(
@@ -758,6 +881,19 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
           for (const [id, fields] of Object.entries(changedLinkedRecords)) {
             const linked = row.linked[id]
 
+            const seen = alreadyWritten.get(id)
+
+            if (seen) {
+              // Listed again so it can still be opened and published from
+              // here, but not written a second time.
+              written.push({
+                id,
+                label: `${schema.namesByItemType[linked?.itemTypeId ?? ''] ?? 'Record'} (already updated)`,
+                published: seen.published
+              })
+              continue
+            }
+
             if (linked) {
               const linkedOutcome = await applyToRecord(
                 client,
@@ -766,6 +902,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
                 publishIfPublished
               )
 
+              alreadyWritten.set(id, { published: linkedOutcome.published })
               written.push({
                 id,
                 label: schema.namesByItemType[linked.itemTypeId] ?? 'Record',
@@ -879,6 +1016,18 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     [client, ctx]
   )
 
+  const duplicateKeys = useMemo(() => duplicateValueKeys(rows), [rows])
+
+  const visibleRows = useMemo(
+    () =>
+      onlyMatches
+        ? rows.filter(
+            (row) => row.status === 'matched' || row.status === 'applied'
+          )
+        : rows,
+    [rows, onlyMatches]
+  )
+
   const pendingRows = useMemo(
     () =>
       rows.filter(
@@ -942,12 +1091,18 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     handleToggleKey: toggleKey,
     handleToggleRow: setRowSelection,
     applyRows,
+    onlyMatches,
+    handleOnlyMatchesChange: setOnlyMatches,
+    visibleRows,
+    duplicateKeys,
     handlePublishRecord: publishRecord,
     scope,
     handleScopeChange: setScope,
     scopeLocale,
     handleScopeLocaleChange: setScopeLocale,
     siteLocales,
+    handleCancelScan: cancelScan,
+    foundSoFar,
     handleReset: reset
   }
 }
