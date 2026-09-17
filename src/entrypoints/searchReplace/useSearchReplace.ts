@@ -398,17 +398,20 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       ? null
       : 'This plugin needs your DatoCMS access token. Enable “Grant access to current user’s API token” in the plugin settings.')
 
+  // A slug is only needed to turn a URL into a record. Searching the whole
+  // model needs no URLs, so models without one — a homepage, a singleton —
+  // can still be searched that way.
+  const scopeIsUsable =
+    scope === 'all'
+      ? true
+      : Boolean(model?.slugFieldChecked && model.slugFieldApiKey) &&
+        searchableTargets(targets).length > 0
+
   const canScan =
     phase !== 'scanning' &&
     phase !== 'applying' &&
-    Boolean(
-      client &&
-      schema &&
-      model?.slugFieldChecked &&
-      model.slugFieldApiKey &&
-      find
-    ) &&
-    (scope === 'all' || searchableTargets(targets).length > 0)
+    Boolean(client && schema && model && find) &&
+    scopeIsUsable
 
   const scan = useCallback(async () => {
     if (!client || !schema || !model || !fieldLoader) {

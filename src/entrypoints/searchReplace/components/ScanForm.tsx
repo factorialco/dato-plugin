@@ -83,7 +83,7 @@ export const ScanForm = ({
           id='model'
           label='Model to search in'
           hint={
-            model?.slugFieldChecked && !model.slugFieldApiKey
+            model?.slugFieldChecked && !model.slugFieldApiKey && scope !== 'all'
               ? 'This model has no slug field, so page URLs cannot be matched to records.'
               : 'Only records of this model are searched.'
           }
@@ -120,7 +120,11 @@ export const ScanForm = ({
             id='searchEverything'
             name='searchEverything'
             label='Search every record of this model'
-            hint='Off: only the pages listed below. On: every record, which reads the whole model and whatever it links to.'
+            hint={
+              model?.slugFieldChecked && !model.slugFieldApiKey
+                ? 'This model has no slug field, so it can only be searched this way.'
+                : 'Off: only the pages listed below. On: every record, which reads the whole model and whatever it links to.'
+            }
             value={scope === 'all'}
             onChange={(on) => onScopeChange(on ? 'all' : 'pages')}
             switchInputProps={{
