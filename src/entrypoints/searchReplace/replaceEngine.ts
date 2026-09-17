@@ -138,6 +138,14 @@ export type ScanReport = {
   /** Field values examined, at every depth. */
   values: number
   /**
+   * Distinct item types the walk opened.
+   *
+   * Field definitions are fetched once per type, so this is what that request
+   * count should match — and what tells apart "this page really does use forty
+   * section types" from the plugin loading types it never met.
+   */
+  itemTypes: string[]
+  /**
    * Field types that held something but were passed over, and any value in a
    * block-bearing field that did not look like a block.
    *
@@ -701,6 +709,10 @@ const walkBlock = (
 
   context.report.blocks += 1
 
+  if (!context.report.itemTypes.includes(itemTypeId)) {
+    context.report.itemTypes.push(itemTypeId)
+  }
+
   const attributes = { ...(block.attributes as Record<string, unknown>) }
   let changed = false
 
@@ -998,7 +1010,7 @@ export const transformRecord = ({
     link,
     matches: [],
     unsearched: [],
-    report: { blocks: 0, values: 0, skippedFieldTypes: [] },
+    report: { blocks: 0, values: 0, itemTypes: [], skippedFieldTypes: [] },
     linkedRecords,
     pendingLinkIds: new Set(),
     pendingItemTypeIds: new Set(),

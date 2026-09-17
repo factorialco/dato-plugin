@@ -59,7 +59,7 @@ const describeScan = (
       return null
     }
 
-    const covered = `Searched ${report.values} value(s) in ${report.blocks} block(s)`
+    const covered = `Searched ${report.values} value(s) in ${report.blocks} block(s) of ${report.itemTypes.length} type(s)`
 
     return report.skippedFieldTypes.length > 0
       ? `${covered} — skipped field types: ${report.skippedFieldTypes.join(', ')}`
