@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Client } from '@datocms/cma-client-browser'
 import {
-  buildLinkResolver,
   createFieldLoader,
   fetchSchemaIndex,
   loadModelDetails
@@ -137,68 +136,5 @@ describe(createFieldLoader, () => {
     await expect(loader.ensure([PAGE])).resolves.toBeFalsy()
     expect(fieldsList).toHaveBeenCalledTimes(2)
     expect(loader.fieldsByItemType[PAGE]).toHaveLength(2)
-  })
-})
-
-describe(buildLinkResolver, () => {
-  // The second regression: slug fields must come from the loader. Reading them
-  // off SearchableModel — where they are only filled in for the model being
-  // searched — left every other model looking slug-less, so the resolver came
-  // back empty and reference links silently stopped matching.
-  it('indexes models whose slug details have not been filled in', async () => {
-    const { client } = buildFakeClient()
-    const schema = await fetchSchemaIndex(client)
-    const loader = createFieldLoader(client)
-
-    expect(schema.models.every((model) => !model.slugFieldChecked)).toBeTruthy()
-
-    const resolver = await buildLinkResolver(
-      client,
-      loader,
-      schema,
-      [PAGE, TAG],
-      ['en'],
-      new Map()
-    )
-
-    expect(resolver.pathOf('rec-tag', 'en')).toBe('/payroll')
-    expect(resolver.recordAt('/hr-software', 'en')).toBe('rec-page')
-  })
-
-  it('reuses a cached index instead of listing records again', async () => {
-    const { client } = buildFakeClient()
-    const schema = await fetchSchemaIndex(client)
-    const loader = createFieldLoader(client)
-    const cache = new Map()
-
-    await buildLinkResolver(client, loader, schema, [PAGE], ['en'], cache)
-    const resolver = await buildLinkResolver(
-      client,
-      loader,
-      schema,
-      [PAGE],
-      ['en'],
-      cache
-    )
-
-    expect(cache.size).toBe(1)
-    expect(resolver.recordAt('/hr-software', 'en')).toBe('rec-page')
-  })
-
-  it('indexes nothing when no model is reachable', async () => {
-    const { client } = buildFakeClient()
-    const schema = await fetchSchemaIndex(client)
-    const loader = createFieldLoader(client)
-
-    const resolver = await buildLinkResolver(
-      client,
-      loader,
-      schema,
-      [],
-      ['en'],
-      new Map()
-    )
-
-    expect(resolver.recordAt('/hr-software', 'en')).toBeNull()
   })
 })

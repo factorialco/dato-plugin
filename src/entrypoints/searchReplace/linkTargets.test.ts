@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { buildLinkOptions, internalPathOf } from './linkTargets'
 
-const RESOLVER = { pathOf: () => null, recordAt: () => null }
 const CONVENTION = {
   linkTypeApiKey: 'link_type',
   externalTypeValue: 'external',
@@ -43,7 +42,8 @@ describe(buildLinkOptions, () => {
     buildLinkOptions({
       find,
       replace,
-      resolver: RESOLVER,
+      findRecordId: null,
+      replaceRecordId: null,
       convention: CONVENTION
     })
 
