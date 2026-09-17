@@ -71,6 +71,11 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
               onCaseSensitiveChange={state.handleCaseSensitiveChange}
               wholeWord={state.wholeWord}
               onWholeWordChange={state.handleWholeWordChange}
+              scope={state.scope}
+              onScopeChange={state.handleScopeChange}
+              scopeLocale={state.scopeLocale}
+              onScopeLocaleChange={state.handleScopeLocaleChange}
+              siteLocales={state.siteLocales}
               targets={state.targets}
               canScan={state.canScan}
               busy={busy}

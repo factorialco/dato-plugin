@@ -56,3 +56,33 @@ describe(scanParametersSignature, () => {
     ).toBe(BASE)
   })
 })
+
+describe('scope', () => {
+  const options = {
+    find: '/pricing',
+    replace: '/plans',
+    caseSensitive: false,
+    wholeWord: false
+  }
+  const targets = parseTargets('https://factorial.ke/payroll', ['en_ke'])
+
+  it('separates a whole-model search from the same terms on given pages', () => {
+    expect(
+      scanParametersSignature('m1', options, targets, 'all', 'en')
+    ).not.toBe(scanParametersSignature('m1', options, targets, 'pages', 'en'))
+  })
+
+  it('invalidates results when the locale being searched changes', () => {
+    expect(scanParametersSignature('m1', options, [], 'all', 'en')).not.toBe(
+      scanParametersSignature('m1', options, [], 'all', 'es')
+    )
+  })
+
+  // Whole-model results do not depend on the URL list, so editing it must not
+  // mark them stale.
+  it('ignores the page list when searching the whole model', () => {
+    expect(scanParametersSignature('m1', options, targets, 'all', 'en')).toBe(
+      scanParametersSignature('m1', options, [], 'all', 'en')
+    )
+  })
+})

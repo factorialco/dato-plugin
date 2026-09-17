@@ -5,6 +5,7 @@ import {
   TextField,
   TextareaField
 } from 'datocms-react-ui'
+import type { SearchScope } from '../useSearchReplace'
 import s from '../searchReplace.module.css'
 import type { SearchableModel } from '../searchReplace.services'
 import type { ParsedTarget } from '../urlTargets'
@@ -26,6 +27,11 @@ export type ScanFormProps = {
   onCaseSensitiveChange: (value: boolean) => void
   wholeWord: boolean
   onWholeWordChange: (value: boolean) => void
+  scope: SearchScope
+  onScopeChange: (scope: SearchScope) => void
+  scopeLocale: string | null
+  onScopeLocaleChange: (locale: string) => void
+  siteLocales: string[]
   targets: ParsedTarget[]
   canScan: boolean
   busy: boolean
@@ -46,6 +52,11 @@ export const ScanForm = ({
   onCaseSensitiveChange,
   wholeWord,
   onWholeWordChange,
+  scope,
+  onScopeChange,
+  scopeLocale,
+  onScopeLocaleChange,
+  siteLocales,
   targets,
   canScan,
   busy,
@@ -58,6 +69,10 @@ export const ScanForm = ({
     value: candidate.id
   }))
   const selected = options.find((option) => option.value === model?.id) ?? null
+  const localeOptions: Option[] = siteLocales.map((locale) => ({
+    label: locale,
+    value: locale
+  }))
   const searchable = searchableTargets(targets).length
 
   return (
@@ -68,7 +83,7 @@ export const ScanForm = ({
           id='model'
           label='Model to search in'
           hint={
-            model?.slugFieldChecked && !model.slugFieldApiKey
+            model?.slugFieldChecked && !model.slugFieldApiKey && scope !== 'all'
               ? 'This model has no slug field, so page URLs cannot be matched to records.'
               : 'Only records of this model are searched.'
           }
@@ -101,6 +116,43 @@ export const ScanForm = ({
         />
 
         <div className={s.fullWidth}>
+          <SwitchField
+            id='searchEverything'
+            name='searchEverything'
+            label='Search every record of this model'
+            hint={
+              model?.slugFieldChecked && !model.slugFieldApiKey
+                ? 'This model has no slug field, so it can only be searched this way.'
+                : 'Off: only the pages listed below. On: every record, which reads the whole model and whatever it links to.'
+            }
+            value={scope === 'all'}
+            onChange={(on) => onScopeChange(on ? 'all' : 'pages')}
+            switchInputProps={{
+              name: 'searchEverything',
+              value: scope === 'all'
+            }}
+          />
+        </div>
+
+        {scope === 'all' && (
+          <SelectField
+            name='scopeLocale'
+            id='scopeLocale'
+            label='Locale to search'
+            hint='Without page URLs there is no locale to read off one.'
+            value={
+              scopeLocale
+                ? { label: scopeLocale, value: scopeLocale }
+                : (localeOptions[0] ?? null)
+            }
+            onChange={(next) =>
+              onScopeLocaleChange((next as Option | null)?.value ?? '')
+            }
+            selectInputProps={{ options: localeOptions }}
+          />
+        )}
+
+        <div className={s.fullWidth} hidden={scope === 'all'}>
           <TextareaField
             name='urls'
             id='urls'

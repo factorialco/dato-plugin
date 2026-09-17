@@ -386,3 +386,46 @@ export type LinkedRecordPayload = {
   /** Kept for its version, which guards the write. */
   record: FullRecord
 }
+
+/** A record of the chosen model, with enough to label it in the report. */
+export type RecordStub = {
+  id: string
+  label: string
+}
+
+/**
+ * Every record of a model, for a scan that is not scoped to given pages.
+ *
+ * Listed without block payloads: this is only deciding *which* records to walk,
+ * and the walk fetches what it needs in batches afterwards. Asking for the
+ * payloads here would cap the page size at 30 instead of 500.
+ */
+export const fetchModelRecordStubs = async (
+  client: Client,
+  model: SearchableModel,
+  locale: string
+): Promise<RecordStub[]> => {
+  const stubs: RecordStub[] = []
+
+  for await (const record of client.items.listPagedIterator({
+    filter: { type: model.apiKey },
+    version: 'current'
+  })) {
+    const raw = record as unknown as Record<string, unknown>
+    const slugValue = model.slugFieldApiKey
+      ? raw[model.slugFieldApiKey]
+      : undefined
+    const slug = model.slugFieldLocalized
+      ? typeof slugValue === 'object' && slugValue !== null
+        ? (slugValue as Record<string, unknown>)[locale]
+        : undefined
+      : slugValue
+
+    stubs.push({
+      id: record.id,
+      label: typeof slug === 'string' && slug !== '' ? `/${slug}` : record.id
+    })
+  }
+
+  return stubs
+}
