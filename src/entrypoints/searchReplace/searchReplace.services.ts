@@ -77,19 +77,6 @@ const mapWithConcurrency = async <T, R>(
   return results
 }
 
-const linksToItemType = (field: RawField, itemTypeId: string): boolean => {
-  const validator = field.validators.item_item_type as
-    | { item_types?: string[] }
-    | undefined
-
-  return Boolean(validator?.item_types?.includes(itemTypeId))
-}
-
-const pickSlugField = (fields: RawField[]): RawField | null =>
-  fields.find((field) => field.field_type === 'slug') ??
-  fields.find((field) => field.api_key === 'slug') ??
-  null
-
 /** Models a `link` / `links` field is allowed to point at. */
 const linkedItemTypeIds = (field: RawField): string[] => {
   const validator = (field.validators.item_item_type ??
@@ -206,18 +193,24 @@ export const loadModelDetails = async (
 ): Promise<SearchableModel> => {
   await loader.ensure([model.id])
 
-  const fields = (await client.fields.list(model.id)) as unknown as RawField[]
-  const slugField = pickSlugField(fields)
+  // Read back from the loader rather than asking again: `ensure` has just
+  // fetched exactly this.
+  const fields = loader.fieldsByItemType[model.id] ?? []
+  const slugField =
+    fields.find((field) => field.fieldType === 'slug') ??
+    fields.find((field) => field.apiKey === 'slug')
   const parentField = fields.find(
-    (field) => field.field_type === 'link' && linksToItemType(field, model.id)
+    (field) =>
+      field.fieldType === 'link' &&
+      (field.linkedItemTypeIds ?? []).includes(model.id)
   )
 
   return {
     ...model,
     slugFieldChecked: true,
-    slugFieldApiKey: slugField?.api_key ?? null,
+    slugFieldApiKey: slugField?.apiKey ?? null,
     slugFieldLocalized: slugField?.localized ?? false,
-    parentFieldApiKey: parentField?.api_key ?? null
+    parentFieldApiKey: parentField?.apiKey ?? null
   }
 }
 
@@ -311,40 +304,72 @@ export const applyToRecord = async (
 export const MAX_RESOLVE_PASSES = 50
 
 /**
+ * Largest page the API returns when block payloads are included. Fetching by
+ * id is bounded by the same limit.
+ */
+const NESTED_PAGE_SIZE = 30
+
+const chunked = <T>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = []
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size))
+  }
+
+  return chunks
+}
+
+const toPayload = (record: FullRecord): LinkedRecordPayload => ({
+  itemTypeId: (record.item_type as { id: string } | undefined)?.id ?? '',
+  values: record as Record<string, unknown>,
+  record
+})
+
+/**
  * Loads referenced records so their contents can be searched with the page.
  *
- * Fetched one by one rather than through a filter, because these are records
- * of many different models and `filter[ids]` cannot be combined with the
- * nesting the walk needs.
+ * Fetched in batches by id. These are records of many different models, which
+ * rules out `filter[type]` — but not `filter[ids]`, which combines with the
+ * nesting the walk needs perfectly well. Fetching them one at a time, as this
+ * did, was the single largest source of requests: a page built from a few
+ * hundred referenced records cost a few hundred round trips, each doubled by
+ * its CORS preflight.
+ *
+ * A batch that fails is retried one id at a time, so a single unreadable or
+ * deleted reference costs only itself rather than everything beside it.
  */
 export const fetchLinkedRecords = async (
   client: Client,
   ids: string[]
 ): Promise<Record<string, LinkedRecordPayload>> => {
-  const loaded = await mapWithConcurrency(ids, async (id) => {
-    try {
-      return [id, await fetchRecord(client, id)] as const
-    } catch {
-      // A reference the current user cannot read, or a record since deleted:
-      // the page is still worth searching without it.
-      return [id, null] as const
+  const batches = await mapWithConcurrency(
+    chunked(ids, NESTED_PAGE_SIZE),
+    async (batch): Promise<FullRecord[]> => {
+      try {
+        return (await client.items.list({
+          filter: { ids: batch.join(',') },
+          nested: true,
+          version: 'current',
+          page: { limit: NESTED_PAGE_SIZE }
+        })) as unknown as FullRecord[]
+      } catch {
+        const one = await mapWithConcurrency(batch, async (id) => {
+          try {
+            return await fetchRecord(client, id)
+          } catch {
+            // A reference the current user cannot read, or a record since
+            // deleted: the page is still worth searching without it.
+            return null
+          }
+        })
+
+        return one.filter((record): record is FullRecord => record !== null)
+      }
     }
-  })
+  )
 
   return Object.fromEntries(
-    loaded
-      .filter(
-        (entry): entry is readonly [string, FullRecord] => entry[1] !== null
-      )
-      .map(([id, record]) => [
-        id,
-        {
-          itemTypeId:
-            (record.item_type as { id: string } | undefined)?.id ?? '',
-          values: record as Record<string, unknown>,
-          record
-        }
-      ])
+    batches.flat().map((record) => [record.id, toPayload(record)])
   )
 }
 
