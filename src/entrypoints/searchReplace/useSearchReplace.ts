@@ -118,6 +118,50 @@ export type SearchScope = 'pages' | 'all'
  */
 const LARGE_SCAN = 200
 
+/**
+ * Occurrences worth selecting: everything rewritable, minus repeats of a value
+ * already covered by an earlier row.
+ *
+ * A shared component is reached from every page that uses it, so one stored
+ * value appears under many pages. Selecting it once is the honest count, and
+ * keeps "Apply all" from queueing the same edit over and over.
+ */
+const selectableKeys = (rows: ScanRow[]): Set<string> => {
+  const seen = new Set<string>()
+  const keys = new Set<string>()
+
+  for (const row of rows) {
+    for (const match of row.matches) {
+      if (!match.applicable || seen.has(match.valueKey)) {
+        continue
+      }
+
+      seen.add(match.valueKey)
+      keys.add(match.key)
+    }
+  }
+
+  return keys
+}
+
+/** Values already covered by an earlier row, so repeats can be labelled. */
+export const duplicateValueKeys = (rows: ScanRow[]): Set<string> => {
+  const seen = new Set<string>()
+  const repeats = new Set<string>()
+
+  for (const row of rows) {
+    for (const match of row.matches) {
+      if (seen.has(match.valueKey)) {
+        repeats.add(match.key)
+      } else {
+        seen.add(match.valueKey)
+      }
+    }
+  }
+
+  return repeats
+}
+
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
@@ -245,6 +289,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
   const [rows, setRows] = useState<ScanRow[]>([])
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [onlyMatches, setOnlyMatches] = useState(false)
   const [scope, setScope] = useState<SearchScope>('pages')
   const [scopeLocale, setScopeLocale] = useState<string | null>(null)
   const [linkOptions, setLinkOptions] = useState<LinkOptions | null>(null)
@@ -670,17 +715,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       }
 
       setRows(scanned)
-      setSelectedKeys(
-        // Only what can actually be rewritten: a reference the replacement
-        // cannot be expressed as is reported, not selected.
-        new Set(
-          scanned.flatMap((row) =>
-            row.matches
-              .filter((match) => match.applicable)
-              .map((match) => match.key)
-          )
-        )
-      )
+      setSelectedKeys(selectableKeys(scanned))
       setPhase('reviewing')
       setScannedSignature(scanSignature)
 
@@ -954,6 +989,18 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     [client, ctx]
   )
 
+  const duplicateKeys = useMemo(() => duplicateValueKeys(rows), [rows])
+
+  const visibleRows = useMemo(
+    () =>
+      onlyMatches
+        ? rows.filter(
+            (row) => row.status === 'matched' || row.status === 'applied'
+          )
+        : rows,
+    [rows, onlyMatches]
+  )
+
   const pendingRows = useMemo(
     () =>
       rows.filter(
@@ -1017,6 +1064,10 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     handleToggleKey: toggleKey,
     handleToggleRow: setRowSelection,
     applyRows,
+    onlyMatches,
+    handleOnlyMatchesChange: setOnlyMatches,
+    visibleRows,
+    duplicateKeys,
     handlePublishRecord: publishRecord,
     scope,
     handleScopeChange: setScope,

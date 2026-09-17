@@ -100,6 +100,15 @@ export type LinkOptions = {
 export type Match = {
   /** Stable across dry run and apply. */
   key: string
+  /**
+   * Identity of the stored value itself, independent of the page it was
+   * reached through.
+   *
+   * A shared component is reached from every page that uses it, so one stored
+   * value shows up under many pages. This is what says they are the same
+   * value — and therefore one edit, not many.
+   */
+  valueKey: string
   recordId: string
   /** Breadcrumb of the value's position, e.g. `Sections › Hero › Body`. */
   path: string
@@ -215,6 +224,12 @@ type WalkContext = {
    * reference to it.
    */
   walkedLinkIds: Set<string>
+  /**
+   * How much of the current path belongs to the page rather than to the record
+   * the value actually lives in. Everything past it identifies the value
+   * within its own record.
+   */
+  recordPathDepth: number
   /** Null when the search is not for a URL, so references cannot match. */
   link: LinkOptions | null
   matches: Match[]
@@ -397,6 +412,9 @@ const walkLinkField = (
 
   context.matches.push({
     key,
+    valueKey: `${context.recordId}|${pathKeyOf(
+      fieldPath.slice(context.recordPathDepth)
+    )}|link`,
     recordId: context.recordId,
     path: pathLabelOf(fieldPath),
     locale,
@@ -509,7 +527,11 @@ const walkLinkedRecord = (
   // round a longer loop — stops here.
   context.walkedLinkIds.add(recordId)
 
-  const nested: WalkContext = { ...context, recordId }
+  const nested: WalkContext = {
+    ...context,
+    recordId,
+    recordPathDepth: linkedPath.length
+  }
 
   const values = { ...linked.values }
   let changed = false
@@ -615,9 +637,13 @@ const walkString = (
 
   occurrences.forEach(({ start, end, replace }, index) => {
     const key = `${context.recordId}|${pathKey}|${index}`
+    const valueKey = `${context.recordId}|${pathKeyOf(
+      path.slice(context.recordPathDepth)
+    )}|${index}`
 
     context.matches.push({
       key,
+      valueKey,
       recordId: context.recordId,
       path: pathLabel,
       locale: context.locale,
@@ -1015,6 +1041,7 @@ export const transformRecord = ({
     pendingLinkIds: new Set(),
     pendingItemTypeIds: new Set(),
     changedLinkedRecords: {},
+    recordPathDepth: 0,
     walkedLinkIds: new Set([record.id])
   }
 
