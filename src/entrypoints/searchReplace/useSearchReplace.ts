@@ -759,6 +759,12 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       let applied = 0
       let failed = 0
 
+      // A component used across the site is reached from every page that uses
+      // it, so the same record turns up in many rows. It only has to be
+      // written once — and writing it twice would fail anyway, since the
+      // second attempt still carries the version read before the first.
+      const alreadyWritten = new Map<string, { published: boolean }>()
+
       for (const row of toApply) {
         const enabledKeys = new Set(
           row.matches
@@ -813,6 +819,19 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
           for (const [id, fields] of Object.entries(changedLinkedRecords)) {
             const linked = row.linked[id]
 
+            const seen = alreadyWritten.get(id)
+
+            if (seen) {
+              // Listed again so it can still be opened and published from
+              // here, but not written a second time.
+              written.push({
+                id,
+                label: `${schema.namesByItemType[linked?.itemTypeId ?? ''] ?? 'Record'} (already updated)`,
+                published: seen.published
+              })
+              continue
+            }
+
             if (linked) {
               const linkedOutcome = await applyToRecord(
                 client,
@@ -821,6 +840,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
                 publishIfPublished
               )
 
+              alreadyWritten.set(id, { published: linkedOutcome.published })
               written.push({
                 id,
                 label: schema.namesByItemType[linked.itemTypeId] ?? 'Record',
