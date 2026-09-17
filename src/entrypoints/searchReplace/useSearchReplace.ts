@@ -7,7 +7,6 @@ import { urlSearchVariants } from './urlVariants'
 import type {
   LinkConvention,
   LinkOptions,
-  LinkedRecord,
   Match,
   MatchOptions,
   ScanReport,
@@ -99,17 +98,6 @@ export type ScanRow = {
 
 export type Phase = 'idle' | 'scanning' | 'reviewing' | 'applying'
 
-/** Drops the payload down to what the engine needs. */
-const toLinkedRecords = (
-  linked: Record<string, LinkedRecordPayload>
-): Record<string, LinkedRecord> =>
-  Object.fromEntries(
-    Object.entries(linked).map(([id, payload]) => [
-      id,
-      { itemTypeId: payload.itemTypeId, values: payload.values }
-    ])
-  )
-
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
@@ -134,7 +122,10 @@ const plural = (count: number, one: string, many = `${one}s`): string =>
 const walkWithLinkedRecords = async (
   client: NonNullable<ReturnType<typeof buildClient>>,
   loader: FieldLoader,
-  input: Omit<Parameters<typeof transformRecord>[0], 'linkedRecords'>
+  input: Omit<
+    Parameters<typeof transformRecord>[0],
+    'linkedRecords' | 'fieldsByItemType'
+  >
 ): Promise<{
   result: ReturnType<typeof transformRecord>
   linked: Record<string, LinkedRecordPayload>
@@ -496,7 +487,6 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
           } = await walkWithLinkedRecords(client, fieldLoader, {
             record,
             itemTypeId: model.id,
-            fieldsByItemType: schema.fieldsByItemType,
             namesByItemType: schema.namesByItemType,
             options,
             locale: target.datoLocale,
@@ -608,7 +598,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
   const applyRows = useCallback(
     async (toApply: ScanRow[]) => {
-      if (!client || !schema || !model) {
+      if (!client || !schema || !model || !fieldLoader) {
         return
       }
 
@@ -630,17 +620,30 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
         }
 
         try {
-          const { changedFields, changedLinkedRecords } = transformRecord({
+          const {
+            result: { changedFields, changedLinkedRecords }
+          } = await walkWithLinkedRecords(client, fieldLoader, {
             record: row.record,
             itemTypeId: model.id,
-            fieldsByItemType: schema.fieldsByItemType,
             namesByItemType: schema.namesByItemType,
             options,
             locale: row.target.datoLocale,
             link: linkOptions,
-            linkedRecords: toLinkedRecords(row.linked),
             enabledKeys
           })
+
+          const changedRecordCount =
+            Object.keys(changedLinkedRecords).length +
+            (Object.keys(changedFields).length > 0 ? 1 : 0)
+
+          // Selected occurrences that rewrite nothing mean the apply walked
+          // different input from the dry run. Saying so beats reporting
+          // success over a write that never happened.
+          if (changedRecordCount === 0) {
+            throw new Error(
+              'Nothing to write — the page no longer matches the dry run. Scan again.'
+            )
+          }
 
           // Referenced records are saved first: if one of them fails, the page
           // is left untouched rather than half-updated.
@@ -722,7 +725,8 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       selectedKeys,
       publishIfPublished,
       ctx,
-      linkOptions
+      linkOptions,
+      fieldLoader
     ]
   )
 
