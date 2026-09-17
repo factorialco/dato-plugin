@@ -536,8 +536,14 @@ export const buildLinkResolver = async (
   }
 }
 
-/** How deep a chain of referenced records to follow before giving up. */
-export const MAX_LINK_DEPTH = 6
+/**
+ * Runaway guard on the resolve loop, not a depth limit.
+ *
+ * Each pass loads whatever the previous one asked for, so the count needed
+ * depends on how deeply a page nests its references — generous enough that no
+ * real page reaches it, and the scan says so if one ever does.
+ */
+export const MAX_RESOLVE_PASSES = 50
 
 /**
  * Loads referenced records so their contents can be searched with the page.

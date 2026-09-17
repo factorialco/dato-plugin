@@ -161,3 +161,81 @@ describe('pages whose content lives in a linked record', () => {
     expect(() => run(loop)).not.toThrow()
   })
 })
+
+describe('a record pointed at from many places', () => {
+  const SHARED = 'rec-shared'
+
+  const sharedFields: FieldsByItemType = {
+    [PAGE]: [
+      {
+        apiKey: 'sections_block',
+        label: 'Sections',
+        fieldType: 'link',
+        localized: false,
+        linkedItemTypeIds: [SECTIONS]
+      },
+      {
+        apiKey: 'tag_list',
+        label: 'Tags',
+        fieldType: 'links',
+        localized: false,
+        linkedItemTypeIds: [CTA]
+      }
+    ],
+    [SECTIONS]: [
+      {
+        apiKey: 'ctas',
+        label: 'CTAs',
+        fieldType: 'links',
+        localized: false,
+        linkedItemTypeIds: [CTA]
+      }
+    ],
+    [CTA]: [
+      {
+        apiKey: 'external_url',
+        label: 'Hyperlink to external url',
+        fieldType: 'string',
+        localized: false
+      }
+    ]
+  }
+
+  // The same CTA reached three ways: straight off the page, and twice through
+  // the sections record. It is one record holding one value.
+  const linked: Record<string, LinkedRecord> = {
+    'rec-sections': {
+      itemTypeId: SECTIONS,
+      values: { ctas: [SHARED, SHARED] }
+    },
+    [SHARED]: {
+      itemTypeId: CTA,
+      values: { external_url: 'https://factorialhr.com/pricing' }
+    }
+  }
+
+  const walkSharedPage = () =>
+    transformRecord({
+      record: {
+        id: 'rec-page',
+        sections_block: 'rec-sections',
+        tag_list: [SHARED]
+      },
+      itemTypeId: PAGE,
+      fieldsByItemType: sharedFields,
+      namesByItemType: { ...NAMES, [CTA]: 'Action CTA' },
+      options: OPTIONS,
+      locale: 'en',
+      linkedRecords: linked
+    })
+
+  it('reports it once, not once per reference', () => {
+    expect(walkSharedPage().matches).toHaveLength(1)
+  })
+
+  it('does not multiply as references nest', () => {
+    const keys = walkSharedPage().matches.map((match) => match.key)
+
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+})

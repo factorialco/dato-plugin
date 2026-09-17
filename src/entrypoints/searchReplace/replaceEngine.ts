@@ -195,8 +195,16 @@ type WalkContext = {
   pendingLinkIds: Set<string>
   pendingItemTypeIds: Set<string>
   changedLinkedRecords: Record<string, Record<string, unknown>>
-  /** Record ids on the current path, so a cycle cannot loop forever. */
-  visitedLinkIds: Set<string>
+  /**
+   * Referenced records already walked, shared across the whole traversal.
+   *
+   * Deliberately not per-branch: a record pointed at from fifty places is one
+   * record, and walking it once per reference reported the same stored value
+   * fifty times over — and, with nesting, multiplied. Walking it once is also
+   * what makes the counts mean something, since editing it once fixes every
+   * reference to it.
+   */
+  walkedLinkIds: Set<string>
   /** Null when the search is not for a URL, so references cannot match. */
   link: LinkOptions | null
   matches: Match[]
@@ -465,7 +473,7 @@ const walkLinkedRecord = (
   path: PathSegment[],
   context: WalkContext
 ): void => {
-  if (context.visitedLinkIds.has(recordId)) {
+  if (context.walkedLinkIds.has(recordId)) {
     return
   }
 
@@ -489,11 +497,11 @@ const walkLinkedRecord = (
   const name = context.namesByItemType[linked.itemTypeId] ?? 'Linked record'
   const linkedPath = [...path, { key: recordId, label: name }]
 
-  const nested: WalkContext = {
-    ...context,
-    recordId,
-    visitedLinkIds: new Set(context.visitedLinkIds).add(recordId)
-  }
+  // Marked before walking, so a record that references itself — directly or
+  // round a longer loop — stops here.
+  context.walkedLinkIds.add(recordId)
+
+  const nested: WalkContext = { ...context, recordId }
 
   const values = { ...linked.values }
   let changed = false
@@ -995,7 +1003,7 @@ export const transformRecord = ({
     pendingLinkIds: new Set(),
     pendingItemTypeIds: new Set(),
     changedLinkedRecords: {},
-    visitedLinkIds: new Set([record.id])
+    walkedLinkIds: new Set([record.id])
   }
 
   const changedFields: Record<string, unknown> = {}
