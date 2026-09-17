@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Client } from '@datocms/cma-client-browser'
 import {
   createFieldLoader,
+  fetchLinkedRecords,
   fetchSchemaIndex,
   loadModelDetails
 } from './searchReplace.services'
@@ -136,5 +137,67 @@ describe(createFieldLoader, () => {
     await expect(loader.ensure([PAGE])).resolves.toBeFalsy()
     expect(fieldsList).toHaveBeenCalledTimes(2)
     expect(loader.fieldsByItemType[PAGE]).toHaveLength(2)
+  })
+})
+
+describe(fetchLinkedRecords, () => {
+  const buildRecordClient = () => {
+    const list = vi.fn<(params: Record<string, any>) => Promise<unknown[]>>(
+      (params) =>
+        Promise.resolve(
+          String(params.filter.ids)
+            .split(',')
+            .map((id) => ({ id, item_type: { id: PAGE } }))
+        )
+    )
+    const find = vi.fn<(id: string) => Promise<unknown>>((id) =>
+      Promise.resolve({ id, item_type: { id: PAGE } })
+    )
+
+    return {
+      client: { items: { list, find } } as unknown as Client,
+      list,
+      find
+    }
+  }
+
+  const ids = (count: number) =>
+    Array.from({ length: count }, (_, index) => `rec-${index}`)
+
+  // The point of the change: a page built from hundreds of referenced records
+  // must not cost hundreds of round trips.
+  it('fetches in batches rather than one request per record', async () => {
+    const { client, list, find } = buildRecordClient()
+
+    const loaded = await fetchLinkedRecords(client, ids(70))
+
+    expect(Object.keys(loaded)).toHaveLength(70)
+    expect(list).toHaveBeenCalledTimes(3)
+    expect(find).not.toHaveBeenCalled()
+  })
+
+  it('asks for the block payloads the walk needs', async () => {
+    const { client, list } = buildRecordClient()
+
+    await fetchLinkedRecords(client, ids(2))
+
+    expect(list.mock.calls[0][0]).toMatchObject({
+      filter: { ids: 'rec-0,rec-1' },
+      nested: true,
+      version: 'current'
+    })
+  })
+
+  // One unreadable reference must not cost the twenty-nine beside it.
+  it('falls back to one at a time when a batch fails', async () => {
+    const { client, list, find } = buildRecordClient()
+
+    list.mockRejectedValueOnce(new Error('one of these is not readable'))
+    find.mockRejectedValueOnce(new Error('not readable'))
+
+    const loaded = await fetchLinkedRecords(client, ids(3))
+
+    expect(Object.keys(loaded)).toHaveLength(2)
+    expect(find).toHaveBeenCalledTimes(3)
   })
 })
