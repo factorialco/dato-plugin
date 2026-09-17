@@ -27,6 +27,7 @@ import {
   createFieldLoader,
   fetchDatoLocaleByTld,
   fetchLinkedRecords,
+  fetchModelRecordStubs,
   fetchRecord,
   fetchSchemaIndex,
   loadModelDetails
@@ -102,6 +103,16 @@ export type ScanRow = {
 }
 
 export type Phase = 'idle' | 'scanning' | 'reviewing' | 'applying'
+
+/** Whether a scan is scoped to given page URLs or to a whole model. */
+export type SearchScope = 'pages' | 'all'
+
+/**
+ * Past this many records, a scan is worth confirming before it starts: it is
+ * one request per batch of thirty plus whatever each record references, and
+ * the person asking may not have realised how large the model is.
+ */
+const LARGE_SCAN = 200
 
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
@@ -191,14 +202,21 @@ const walkWithLinkedRecords = async (
 export const scanParametersSignature = (
   modelId: string | null,
   options: MatchOptions,
-  targets: ParsedTarget[]
+  targets: ParsedTarget[],
+  scope: SearchScope = 'pages',
+  scopeLocale: string | null = null
 ): string =>
   JSON.stringify({
     modelId,
     options,
-    targets: searchableTargets(targets).map(
-      (target) => `${target.datoLocale}::${target.contentPath}`
-    )
+    scope,
+    scopeLocale,
+    targets:
+      scope === 'all'
+        ? []
+        : searchableTargets(targets).map(
+            (target) => `${target.datoLocale}::${target.contentPath}`
+          )
   })
 
 export const useSearchReplace = (ctx: RenderPageCtx) => {
@@ -219,6 +237,8 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
   const [rows, setRows] = useState<ScanRow[]>([])
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set())
+  const [scope, setScope] = useState<SearchScope>('pages')
+  const [scopeLocale, setScopeLocale] = useState<string | null>(null)
   const [linkOptions, setLinkOptions] = useState<LinkOptions | null>(null)
   const [progress, setProgress] = useState<{
     done: number
@@ -358,8 +378,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
   )
 
   const scanSignature = useMemo(
-    () => scanParametersSignature(modelId, options, targets),
-    [modelId, options, targets]
+    () =>
+      scanParametersSignature(modelId, options, targets, scope, scopeLocale),
+    [modelId, options, targets, scope, scopeLocale]
   )
   const [scannedSignature, setScannedSignature] = useState<string | null>(null)
 
@@ -387,7 +408,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       model.slugFieldApiKey &&
       find
     ) &&
-    searchableTargets(targets).length > 0
+    (scope === 'all' || searchableTargets(targets).length > 0)
 
   const scan = useCallback(async () => {
     if (!client || !schema || !model || !fieldLoader) {
@@ -404,6 +425,10 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
         ? model
         : await loadModelDetails(client, fieldLoader, model)
       const searchable = searchableTargets(targets)
+      // Without URLs there is no locale to read off one, so the scan uses the
+      // locale chosen in the form.
+      const scanLocale =
+        scopeLocale ?? searchable[0]?.datoLocale ?? siteLocales[0] ?? 'en'
       const locales = [
         ...new Set(searchable.map((target) => target.datoLocale as string))
       ]
@@ -437,33 +462,38 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
       setLinkOptions(link)
 
-      setStage(null)
-      setProgress({ done: 0, total: searchable.length })
+      // Rows that never reach a record — skipped URLs, and paths no record
+      // matched — are known before any walking starts.
+      const scanned0: ScanRow[] = []
+      const plan: Array<{ target: ParsedTarget; recordId: string | null }> = []
 
-      const scanned: ScanRow[] = []
+      if (scope === 'pages') {
+        for (const target of targets) {
+          if (target.skipReason !== null) {
+            scanned0.push({
+              target,
+              status: 'skipped',
+              recordId: null,
+              record: null,
+              linked: {},
+              written: [],
+              matches: [],
+              message: null
+            })
+            continue
+          }
 
-      for (const target of targets) {
-        if (target.skipReason !== null) {
-          scanned.push({
-            target,
-            status: 'skipped',
-            recordId: null,
-            record: null,
-            linked: {},
-            written: [],
-            matches: [],
-            message: null
-          })
-          continue
-        }
+          const recordId = await pathFinder.recordAt(
+            target.contentPath as string,
+            target.datoLocale as string
+          )
 
-        const recordId = await pathFinder.recordAt(
-          target.contentPath as string,
-          target.datoLocale as string
-        )
+          if (recordId) {
+            plan.push({ target, recordId })
+            continue
+          }
 
-        if (!recordId) {
-          scanned.push({
+          scanned0.push({
             target,
             status: 'not-found',
             recordId: null,
@@ -473,12 +503,63 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             matches: [],
             message: `No ${model.name} with path ${target.contentPath} in ${target.datoLocale}`
           })
-          setProgress((current) =>
-            current ? { ...current, done: current.done + 1 } : current
-          )
-          continue
+        }
+      }
+
+      if (scope === 'all') {
+        setStage('Listing records')
+
+        const stubs = await fetchModelRecordStubs(
+          client,
+          searchableModel,
+          scanLocale
+        )
+
+        if (stubs.length > LARGE_SCAN) {
+          const go = await ctx.openConfirm({
+            title: `Search all ${stubs.length} ${model.name} records?`,
+            content: `This reads every record of the model and whatever it links to. Nothing is written until you apply a change.`,
+            choices: [{ label: 'Search', value: true, intent: 'positive' }],
+            cancel: { label: 'Cancel', value: false }
+          })
+
+          if (!go) {
+            setPhase('idle')
+            setStage(null)
+
+            return
+          }
         }
 
+        for (const stub of stubs) {
+          plan.push({
+            target: {
+              raw: stub.label,
+              market: null,
+              datoLocale: scanLocale,
+              contentPath: null,
+              localeFromLanguage: false,
+              skipReason: null
+            },
+            recordId: stub.id
+          })
+        }
+      }
+
+      setStage(null)
+      setProgress({
+        done: 0,
+        total: scope === 'all' ? plan.length : searchable.length
+      })
+
+      const scanned: ScanRow[] = [...scanned0]
+
+      // The one place a record is walked, whichever scope chose it.
+      const scanOne = async (
+        target: ParsedTarget,
+        recordId: string,
+        into: ScanRow[]
+      ): Promise<void> => {
         try {
           const record = await fetchRecord(client, recordId)
           const {
@@ -494,7 +575,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             link
           })
 
-          scanned.push({
+          into.push({
             target,
             status: matches.length > 0 ? 'matched' : 'no-matches',
             recordId,
@@ -507,7 +588,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
               : describeScan(unsearched, report, matches.length > 0)
           })
         } catch (error) {
-          scanned.push({
+          into.push({
             target,
             status: 'error',
             recordId,
@@ -522,6 +603,12 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
         setProgress((current) =>
           current ? { ...current, done: current.done + 1 } : current
         )
+      }
+
+      for (const planned of plan) {
+        if (planned.recordId) {
+          await scanOne(planned.target, planned.recordId, scanned)
+        }
       }
 
       setRows(scanned)
@@ -565,6 +652,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     schema,
     model,
     targets,
+    scope,
+    scopeLocale,
+    siteLocales,
     options,
     ctx,
     scanSignature,
@@ -850,6 +940,11 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     handleToggleRow: setRowSelection,
     applyRows,
     handlePublishRecord: publishRecord,
+    scope,
+    handleScopeChange: setScope,
+    scopeLocale,
+    handleScopeLocaleChange: setScopeLocale,
+    siteLocales,
     handleReset: reset
   }
 }
