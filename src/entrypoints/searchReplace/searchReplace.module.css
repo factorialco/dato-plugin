@@ -201,3 +201,9 @@
   color: var(--alert-color);
   margin-top: var(--spacing-s);
 }
+
+.writtenList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-s);
+}

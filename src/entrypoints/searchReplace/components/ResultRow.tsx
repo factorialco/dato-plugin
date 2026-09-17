@@ -137,6 +137,28 @@ export const ResultRow = ({
   return (
     <div className={s.row}>
       <div className={`${s.rowHeader} ${hasMatches ? '' : s.rowHeaderQuiet}`}>
+        {row.written.length > 0 && (
+          <div className={s.match}>
+            <div className={s.matchBody}>
+              <div className={s.matchPath}>
+                Changed {row.written.length} record(s) — each needs publishing
+                on its own
+              </div>
+              <div className={s.writtenList}>
+                {row.written.map((record) => (
+                  <Button
+                    key={record.id}
+                    buttonSize='xxs'
+                    onClick={() => onEditRecord(record.id)}
+                  >
+                    Open {record.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
         {hasMatches && (
           <input
             type='checkbox'

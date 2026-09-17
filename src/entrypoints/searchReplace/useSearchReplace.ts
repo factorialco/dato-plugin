@@ -87,6 +87,15 @@ export type ScanRow = {
   record: FullRecord | null
   /** Referenced records loaded with it, so applying can write to them too. */
   linked: Record<string, LinkedRecordPayload>
+  /**
+   * Records actually written, once applied.
+   *
+   * A change usually lands on records the page merely points at, and each has
+   * to be published on its own. Listing them is what makes that possible —
+   * otherwise the only thing left on screen is the page, which may not be
+   * where anything changed.
+   */
+  written: Array<{ id: string; label: string }>
   matches: Match[]
   /** Why the row is in its current state, when that needs saying. */
   message: string | null
@@ -441,6 +450,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             recordId: null,
             record: null,
             linked: {},
+            written: [],
             matches: [],
             message: null
           })
@@ -459,6 +469,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             recordId: null,
             record: null,
             linked: {},
+            written: [],
             matches: [],
             message: `No ${model.name} with path ${target.contentPath} in ${target.datoLocale}`
           })
@@ -489,6 +500,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             recordId,
             record,
             linked,
+            written: [],
             matches,
             message: exhausted
               ? `Stopped before the page was fully resolved — results may be incomplete (${report.values} value(s) in ${report.blocks} block(s))`
@@ -501,6 +513,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             recordId,
             record: null,
             linked: {},
+            written: [],
             matches: [],
             message: errorMessage(error)
           })
@@ -640,6 +653,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             )
           }
 
+          const pageRecordId = row.record.id
+          const written: Array<{ id: string; label: string }> = []
+
           // Referenced records are saved first: if one of them fails, the page
           // is left untouched rather than half-updated.
           for (const [id, fields] of Object.entries(changedLinkedRecords)) {
@@ -652,6 +668,10 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
                 fields,
                 publishIfPublished
               )
+              written.push({
+                id,
+                label: schema.namesByItemType[linked.itemTypeId] ?? 'Record'
+              })
             }
           }
 
@@ -671,6 +691,10 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
                 ? {
                     ...candidate,
                     status: 'applied',
+                    written:
+                      Object.keys(changedFields).length > 0
+                        ? [...written, { id: pageRecordId, label: model.name }]
+                        : written,
                     message: outcome.published
                       ? `${enabledKeys.size} replaced and republished`
                       : `${enabledKeys.size} replaced, saved as draft`
