@@ -181,11 +181,11 @@ describe('transformRecord dry run', () => {
     const { matches } = dryRun()
 
     expect(matches.map((match) => match.path)).toStrictEqual([
-      'Body › en_ke',
-      'Body › en_ke › link URL',
-      'Body › en_ke › Hero › CTA URL',
+      'Body',
+      'Body › link URL',
+      'Body › Hero › CTA URL',
       'Sections › Hero › CTA URL',
-      'SEO › en_ke › title'
+      'SEO › title'
     ])
   })
 
@@ -385,8 +385,8 @@ describe('nested block recursion', () => {
 
   it('descends through a block list and into blocks inside blocks', () => {
     expect(scan('en-ke').matches.map((match) => match.path)).toStrictEqual([
-      'Sections › en-ke › Section › CTA URL',
-      'Sections › en-ke › Section › Inner › Inner › Body'
+      'Sections › Section › CTA URL',
+      'Sections › Section › Inner › Body'
     ])
   })
 
