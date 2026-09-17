@@ -45,9 +45,16 @@ type RawField = {
   validators: Record<string, unknown>
 }
 
-// DatoCMS rate-limits by requests per second; a handful in flight keeps well
-// under it while still being much faster than serial.
-const CONCURRENCY = 3
+/**
+ * Requests in flight at once.
+ *
+ * Dropped to 3 while the plugin was firing one per item type in the whole
+ * project and getting 429s back. It no longer does — what remains is one
+ * request per item type a page actually uses, and a few batches of records —
+ * so the cautious value now just makes the dry run wait in a queue. Ten is
+ * still far below the rate DatoCMS allows for a burst this size.
+ */
+const CONCURRENCY = 10
 
 /** Runs `task` over `items`, a few at a time, preserving order. */
 const mapWithConcurrency = async <T, R>(

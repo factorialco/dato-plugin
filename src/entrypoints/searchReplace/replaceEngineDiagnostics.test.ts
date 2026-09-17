@@ -239,3 +239,30 @@ describe('values a walk cannot open', () => {
     expect(report.skippedFieldTypes).toStrictEqual([])
   })
 })
+
+describe('types opened', () => {
+  // The count a /fields request is made for. It must follow the content, not
+  // the types a field's validators merely permit.
+  it('counts each type once, however many blocks of it there are', () => {
+    const fields: FieldsByItemType = {
+      ...PAGE_FIELDS,
+      [FEATURE]: [
+        { apiKey: 'url', label: 'URL', fieldType: 'string', localized: false }
+      ]
+    }
+    const { report } = run(fields, [
+      block('b1', FEATURE, { url: '/a' }),
+      block('b2', FEATURE, { url: '/b' }),
+      block('b3', FEATURE, { url: '/c' })
+    ])
+
+    expect(report.blocks).toBe(3)
+    expect(report.itemTypes).toStrictEqual([FEATURE])
+  })
+
+  it('counts nothing for a page with no blocks', () => {
+    const { report } = run(PAGE_FIELDS, [])
+
+    expect(report.itemTypes).toStrictEqual([])
+  })
+})
