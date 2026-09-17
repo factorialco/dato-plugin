@@ -24,7 +24,7 @@ import type {
 } from './searchReplace.services'
 import {
   EMPTY_LINK_RESOLVER,
-  MAX_LINK_DEPTH,
+  MAX_RESOLVE_PASSES,
   applyToRecord,
   buildLinkResolver,
   createFieldLoader,
@@ -138,6 +138,8 @@ const walkWithLinkedRecords = async (
 ): Promise<{
   result: ReturnType<typeof transformRecord>
   linked: Record<string, LinkedRecordPayload>
+  /** True when the walk stopped at the cap with work still outstanding. */
+  exhausted: boolean
 }> => {
   const linked: Record<string, LinkedRecordPayload> = {}
   const asked = new Set<string>()
@@ -154,7 +156,15 @@ const walkWithLinkedRecords = async (
   // Each pass asks for what it could not resolve — field definitions for the
   // types it met, and the records it was pointed at — so only what a page
   // actually contains is ever fetched.
-  for (let depth = 0; depth < MAX_LINK_DEPTH; depth += 1) {
+  // Loop while each pass is still resolving something, rather than for a
+  // fixed number of passes. The old fixed count was shared between loading
+  // field definitions and loading records, so a cold cache spent its passes on
+  // definitions and never reached the content — and the same search run again,
+  // against a warm cache, went deeper and found more. Results must not depend
+  // on what an earlier scan happened to cache.
+  let passes = 0
+
+  for (; passes < MAX_RESOLVE_PASSES; passes += 1) {
     const loadedTypes = await loader.ensure(result.pendingItemTypeIds)
 
     const missing: string[] = []
@@ -177,7 +187,7 @@ const walkWithLinkedRecords = async (
     result = walk()
   }
 
-  return { result, linked }
+  return { result, linked, exhausted: passes >= MAX_RESOLVE_PASSES }
 }
 
 export const scanParametersSignature = (
@@ -481,7 +491,8 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
           const record = await fetchRecord(client, recordId)
           const {
             result: { matches, unsearched, report },
-            linked
+            linked,
+            exhausted
           } = await walkWithLinkedRecords(client, fieldLoader, {
             record,
             itemTypeId: model.id,
@@ -499,7 +510,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             record,
             linked,
             matches,
-            message: describeScan(unsearched, report, matches.length > 0)
+            message: exhausted
+              ? `Stopped before the page was fully resolved — results may be incomplete (${report.values} value(s) in ${report.blocks} block(s))`
+              : describeScan(unsearched, report, matches.length > 0)
           })
         } catch (error) {
           scanned.push({
