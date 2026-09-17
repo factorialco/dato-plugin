@@ -36,12 +36,16 @@ export const urlSearchVariants = (
 
   const variants: SearchVariant[] = []
 
-  // The absolute spelling first, so it wins over the path it contains.
+  // The absolute spelling first, so it wins over the path it contains. It ends
+  // at a path segment just as the bare form does, so it needs the same
+  // boundary: without it, searching for .../pricing matches inside
+  // .../pricing-plans — including a URL a previous run had already replaced,
+  // which a second run would extend to /pricing-plans-plans.
   if (trimmedFind !== findPath) {
     variants.push({
       find: trimmedFind,
       replace: trimmedReplace,
-      pathBoundary: false
+      pathBoundary: true
     })
   }
 

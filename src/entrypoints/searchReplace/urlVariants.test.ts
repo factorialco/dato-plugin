@@ -35,7 +35,7 @@ describe(urlSearchVariants, () => {
       {
         find: 'https://factorialhr.com/pricing',
         replace: 'https://factorialhr.com/pricing-plans',
-        pathBoundary: false
+        pathBoundary: true
       },
       { find: '/pricing', replace: '/pricing-plans', pathBoundary: true }
     ])
@@ -118,6 +118,34 @@ describe('replacing a URL stored in either shape', () => {
   it('leaves plain text searches alone', () => {
     expect(replaceAll('Factorial HR rocks', 'Factorial HR', 'Factorial')).toBe(
       'Factorial rocks'
+    )
+  })
+})
+
+describe('a URL that already contains the replacement', () => {
+  const find = 'https://factorialhr.com/pricing'
+  const replace = 'https://factorialhr.com/pricing-plans'
+
+  // Applying twice must not keep extending the path. The absolute spelling
+  // ends at a path segment, so it needs the same boundary as the bare one.
+  it('leaves an already-replaced URL alone', () => {
+    expect(replaceAll(replace, find, replace)).toBe(replace)
+  })
+
+  it('leaves a longer path that starts the same alone', () => {
+    expect(
+      replaceAll('https://factorialhr.com/pricing-calculator', find, replace)
+    ).toBe('https://factorialhr.com/pricing-calculator')
+  })
+
+  it('still replaces the exact URL', () => {
+    expect(replaceAll(find, find, replace)).toBe(replace)
+  })
+
+  it('still replaces it before a query or another segment', () => {
+    expect(replaceAll(`${find}?utm=x`, find, replace)).toBe(`${replace}?utm=x`)
+    expect(replaceAll(`${find}/enterprise`, find, replace)).toBe(
+      `${replace}/enterprise`
     )
   })
 })

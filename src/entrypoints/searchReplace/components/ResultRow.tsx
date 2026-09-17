@@ -63,9 +63,16 @@ type MatchLineProps = {
   selected: boolean
   disabled: boolean
   onToggle: (key: string) => void
+  onEditRecord: (recordId: string) => void
 }
 
-const MatchLine = ({ match, selected, disabled, onToggle }: MatchLineProps) => (
+const MatchLine = ({
+  match,
+  selected,
+  disabled,
+  onToggle,
+  onEditRecord
+}: MatchLineProps) => (
   <div
     className={`${s.match} ${selected && match.applicable ? '' : s.deselected}`}
   >
@@ -91,6 +98,11 @@ const MatchLine = ({ match, selected, disabled, onToggle }: MatchLineProps) => (
       </div>
       {match.note && <div className={s.matchNote}>{match.note}</div>}
     </div>
+    {/* A match usually sits in a record the page merely points at, so the
+        page's own Open button does not lead to it. */}
+    <Button buttonSize='xxs' onClick={() => onEditRecord(match.recordId)}>
+      Open
+    </Button>
   </div>
 )
 
@@ -166,6 +178,7 @@ export const ResultRow = ({
             selected={selectedKeys.has(match.key)}
             disabled={busy}
             onToggle={onToggleKey}
+            onEditRecord={onEditRecord}
           />
         ))}
     </div>
