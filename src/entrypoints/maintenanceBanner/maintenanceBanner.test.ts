@@ -137,6 +137,27 @@ describe(handleMaintenanceBannerBoot, () => {
     expect(isMaintenanceNoticeDismissed(windowOf(ctx))).toBeTruthy()
   })
 
+  // Why `onBoot` must not return this promise: DatoCMS waits on what a hook
+  // returns, and this one does not settle until an editor closes the modal.
+  // Handing it over made every publish look like the plugin had hung.
+  it('stays pending for as long as the notice is on screen', async () => {
+    const modal = deferredModal()
+    const ctx = { ...buildCtx(), ...modal }
+    let settled = false
+
+    const shown = handleMaintenanceBannerBoot(ctx).then(() => {
+      settled = true
+    })
+
+    await Promise.resolve()
+    expect(settled).toBeFalsy()
+
+    modal.close()
+    await shown
+
+    expect(settled).toBeTruthy()
+  })
+
   it('does not open a second modal while the first is still open', async () => {
     const modal = deferredModal()
     const ctx = { ...buildCtx(), ...modal }

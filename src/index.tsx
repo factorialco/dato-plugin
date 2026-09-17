@@ -46,7 +46,14 @@ connect({
   },
 
   onBoot(ctx) {
-    return handleMaintenanceBannerBoot(ctx)
+    // Deliberately not returned or awaited. The notice is a modal, and
+    // `ctx.openModal` only resolves once an editor closes it, so returning
+    // that promise hands DatoCMS one that stays pending on a human. DatoCMS
+    // waits on the promises these hooks return and then reports the plugin as
+    // unresponsive — the "operation is taking longer than usual due to some
+    // plugins" toast, which blames `onBeforeItemsPublish`. The notice still
+    // records its own dismissal when the modal closes.
+    showMaintenanceNotice(ctx)
   },
 
   async onBeforeItemsPublish(items, ctx) {
