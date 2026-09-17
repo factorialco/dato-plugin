@@ -98,6 +98,8 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
                 {state.progress.done}
                 {' / '}
                 {state.progress.total}
+                {state.phase === 'scanning' &&
+                  ` · ${state.foundSoFar} occurrence(s) so far`}
               </>
             ) : (
               (state.stage ?? 'Working…')

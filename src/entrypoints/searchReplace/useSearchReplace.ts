@@ -296,6 +296,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
   // A ref rather than state: the scan loop reads it between records, and must
   // see the change the click made rather than the value it closed over.
   const scanCancelled = useRef(false)
+  const [foundSoFar, setFoundSoFar] = useState(0)
   const [progress, setProgress] = useState<{
     done: number
     total: number
@@ -476,6 +477,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
     scanCancelled.current = false
     setPhase('scanning')
+    setFoundSoFar(0)
     setRows([])
     setSelectedKeys(new Set())
     setStage(`Indexing ${model.name} records…`)
@@ -641,6 +643,10 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             },
             sharedLinked
           )
+
+          if (matches.length > 0) {
+            setFoundSoFar((current) => current + matches.length)
+          }
 
           return {
             target,
@@ -1096,6 +1102,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     handleScopeLocaleChange: setScopeLocale,
     siteLocales,
     handleCancelScan: cancelScan,
+    foundSoFar,
     handleReset: reset
   }
 }
