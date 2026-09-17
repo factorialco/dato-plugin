@@ -12,6 +12,12 @@ export type SearchableModel = {
   apiKey: string
   name: string
   /** Field holding the URL segment, or null when the model has none. */
+  /**
+   * Whether the slug details below have been looked up. They are loaded per
+   * model on selection, so before that `slugFieldApiKey` being null means
+   * "not checked yet", not "this model has none".
+   */
+  slugFieldChecked: boolean
   slugFieldApiKey: string | null
   slugFieldLocalized: boolean
   /** Self-referencing link field used to build nested paths, if any. */
@@ -136,6 +142,7 @@ export const fetchSchemaIndex = async (
       apiKey: itemType.api_key,
       name: itemType.name,
       // Filled in by `loadModelDetails` once a model is actually chosen.
+      slugFieldChecked: false,
       slugFieldApiKey: null,
       slugFieldLocalized: false,
       parentFieldApiKey: null
@@ -208,6 +215,7 @@ export const loadModelDetails = async (
 
   return {
     ...model,
+    slugFieldChecked: true,
     slugFieldApiKey: slugField?.api_key ?? null,
     slugFieldLocalized: slugField?.localized ?? false,
     parentFieldApiKey: parentField?.api_key ?? null

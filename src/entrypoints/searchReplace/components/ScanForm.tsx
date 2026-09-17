@@ -52,9 +52,9 @@ export const ScanForm = ({
   onScan
 }: ScanFormProps) => {
   const options: Option[] = models.map((candidate) => ({
-    label: candidate.slugFieldApiKey
-      ? candidate.name
-      : `${candidate.name} (no slug field)`,
+    // Whether a model has a slug field is only known once it is chosen, so
+    // the list cannot say — and must not imply otherwise.
+    label: candidate.name,
     value: candidate.id
   }))
   const selected = options.find((option) => option.value === model?.id) ?? null
@@ -68,7 +68,7 @@ export const ScanForm = ({
           id='model'
           label='Model to search in'
           hint={
-            model && !model.slugFieldApiKey
+            model?.slugFieldChecked && !model.slugFieldApiKey
               ? 'This model has no slug field, so page URLs cannot be matched to records.'
               : 'Only records of this model are searched.'
           }
