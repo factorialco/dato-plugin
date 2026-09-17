@@ -102,6 +102,11 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
             ) : (
               (state.stage ?? 'Working…')
             )}
+            {state.phase === 'scanning' && (
+              <Button buttonSize='xxs' onClick={state.handleCancelScan}>
+                Stop
+              </Button>
+            )}
           </div>
         )}
 

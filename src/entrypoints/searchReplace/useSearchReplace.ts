@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { buildClient } from '@datocms/cma-client-browser'
 import type { RenderPageCtx } from 'datocms-plugin-sdk'
 import { readParameters } from '../../lib/pluginParameters'
@@ -293,6 +293,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
   const [scope, setScope] = useState<SearchScope>('pages')
   const [scopeLocale, setScopeLocale] = useState<string | null>(null)
   const [linkOptions, setLinkOptions] = useState<LinkOptions | null>(null)
+  // A ref rather than state: the scan loop reads it between records, and must
+  // see the change the click made rather than the value it closed over.
+  const scanCancelled = useRef(false)
   const [progress, setProgress] = useState<{
     done: number
     total: number
@@ -471,6 +474,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       return
     }
 
+    scanCancelled.current = false
     setPhase('scanning')
     setRows([])
     setSelectedKeys(new Set())
@@ -673,6 +677,12 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
       // its time waiting: one request to fetch, then a walk that waits on its
       // own requests, then the next page.
       for (const batch of chunked(plan, SCAN_BATCH)) {
+        // Checked per batch rather than per record: a batch is one request
+        // that is already in flight by the time anyone clicks.
+        if (scanCancelled.current) {
+          break
+        }
+
         const fetched = await fetchRecordsByIds(
           client,
           batch
@@ -753,6 +763,17 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     scanSignature,
     linkConvention
   ])
+
+  /**
+   * Stops a scan between records.
+   *
+   * Whatever was searched before the stop is kept: those rows are complete,
+   * and a mistyped search term over a large model should not mean waiting for
+   * it to finish or reloading the page.
+   */
+  const cancelScan = useCallback(() => {
+    scanCancelled.current = true
+  }, [])
 
   const toggleKey = useCallback((key: string) => {
     setSelectedKeys((current) => {
@@ -1074,6 +1095,7 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
     scopeLocale,
     handleScopeLocaleChange: setScopeLocale,
     siteLocales,
+    handleCancelScan: cancelScan,
     handleReset: reset
   }
 }
