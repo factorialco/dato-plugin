@@ -172,6 +172,7 @@ export const SearchReplacePage = ({ ctx }: SearchReplacePageProps) => {
                   )
                 }
                 onEditRecord={(recordId) => ctx.editItem(recordId)}
+                onPublishRecord={state.handlePublishRecord}
               />
             ))}
           </>

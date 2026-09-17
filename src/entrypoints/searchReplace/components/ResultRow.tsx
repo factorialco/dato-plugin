@@ -114,6 +114,7 @@ export type ResultRowProps = {
   onToggleRow: (row: ScanRow, selected: boolean) => void
   onApplyRow: (row: ScanRow) => void
   onEditRecord: (recordId: string) => void
+  onPublishRecord: (recordId: string) => void
 }
 
 export const ResultRow = ({
@@ -123,7 +124,8 @@ export const ResultRow = ({
   onToggleKey,
   onToggleRow,
   onApplyRow,
-  onEditRecord
+  onEditRecord,
+  onPublishRecord
 }: ResultRowProps) => {
   const applicableMatches = row.matches.filter((match) => match.applicable)
   const selectedInRow = applicableMatches.filter((match) =>
@@ -169,6 +171,40 @@ export const ResultRow = ({
           </Button>
         )}
       </div>
+
+      {row.written.length > 0 && (
+        <div className={s.match}>
+          <div className={s.matchBody}>
+            <div className={s.matchPath}>
+              Changed {row.written.length} record(s)
+            </div>
+            <div className={s.writtenList}>
+              {row.written.map((record) => (
+                <span className={s.writtenItem} key={record.id}>
+                  <Button
+                    buttonSize='xxs'
+                    onClick={() => onEditRecord(record.id)}
+                  >
+                    Open {record.label}
+                  </Button>
+                  {record.published ? (
+                    <span className={s.matchPath}>published</span>
+                  ) : (
+                    <Button
+                      buttonSize='xxs'
+                      buttonType='primary'
+                      disabled={busy}
+                      onClick={() => onPublishRecord(record.id)}
+                    >
+                      Publish
+                    </Button>
+                  )}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {hasMatches &&
         row.matches.map((match) => (
