@@ -28,8 +28,12 @@ import {
   fetchDatoLocaleByTld,
   fetchLinkedRecords,
   fetchModelRecordStubs,
-  fetchRecord,
+  fetchRecordsByIds,
   fetchSchemaIndex,
+  SCAN_BATCH,
+  SCAN_PARALLEL,
+  chunked,
+  mapWithLimit,
   loadModelDetails
 } from './searchReplace.services'
 import type { ParsedTarget } from './urlTargets'
@@ -150,7 +154,11 @@ const walkWithLinkedRecords = async (
   /** True when the walk stopped at the cap with work still outstanding. */
   exhausted: boolean
 }> => {
-  const linked: Record<string, LinkedRecordPayload> = { ...seed }
+  // The seed is used directly rather than copied, so a caller can hand the
+  // same cache to every record in a scan. Pages share components — a nav, a
+  // footer, a CTA used everywhere — and fetching those once per page was most
+  // of the cost of scanning a whole model.
+  const linked = seed
   const asked = new Set<string>(Object.keys(seed))
 
   const walk = () =>
@@ -557,28 +565,35 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
 
       const scanned: ScanRow[] = [...scanned0]
 
+      // One cache of referenced records for the whole scan.
+      const sharedLinked: Record<string, LinkedRecordPayload> = {}
+
       // The one place a record is walked, whichever scope chose it.
       const scanOne = async (
         target: ParsedTarget,
         recordId: string,
-        into: ScanRow[]
-      ): Promise<void> => {
+        record: FullRecord
+      ): Promise<ScanRow> => {
         try {
-          const record = await fetchRecord(client, recordId)
           const {
             result: { matches, unsearched, report },
             linked,
             exhausted
-          } = await walkWithLinkedRecords(client, fieldLoader, {
-            record,
-            itemTypeId: model.id,
-            namesByItemType: schema.namesByItemType,
-            options,
-            locale: target.datoLocale,
-            link
-          })
+          } = await walkWithLinkedRecords(
+            client,
+            fieldLoader,
+            {
+              record,
+              itemTypeId: model.id,
+              namesByItemType: schema.namesByItemType,
+              options,
+              locale: target.datoLocale,
+              link
+            },
+            sharedLinked
+          )
 
-          into.push({
+          return {
             target,
             status: matches.length > 0 ? 'matched' : 'no-matches',
             recordId,
@@ -589,9 +604,9 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             message: exhausted
               ? `Stopped before the page was fully resolved — results may be incomplete (${report.values} value(s) in ${report.blocks} block(s))`
               : describeScan(unsearched, report, matches.length > 0)
-          })
+          }
         } catch (error) {
-          into.push({
+          return {
             target,
             status: 'error',
             recordId,
@@ -600,18 +615,58 @@ export const useSearchReplace = (ctx: RenderPageCtx) => {
             written: [],
             matches: [],
             message: errorMessage(error)
-          })
+          }
+        } finally {
+          setProgress((current) =>
+            current ? { ...current, done: current.done + 1 } : current
+          )
         }
-
-        setProgress((current) =>
-          current ? { ...current, done: current.done + 1 } : current
-        )
       }
 
-      for (const planned of plan) {
-        if (planned.recordId) {
-          await scanOne(planned.target, planned.recordId, scanned)
+      // Records are fetched a batch at a time and then walked in parallel.
+      // Scanning fifteen hundred pages one after another spent almost all of
+      // its time waiting: one request to fetch, then a walk that waits on its
+      // own requests, then the next page.
+      for (const batch of chunked(plan, SCAN_BATCH)) {
+        const fetched = await fetchRecordsByIds(
+          client,
+          batch
+            .map((planned) => planned.recordId)
+            .filter((id): id is string => id !== null)
+        )
+
+        const walked = await mapWithLimit(
+          batch,
+          SCAN_PARALLEL,
+          async (planned) =>
+            planned.recordId && fetched[planned.recordId]
+              ? await scanOne(
+                  planned.target,
+                  planned.recordId,
+                  fetched[planned.recordId]
+                )
+              : null
+        )
+
+        for (const row of walked) {
+          if (row) {
+            scanned.push(row)
+          }
         }
+
+        // Shown as they arrive: on a whole-model scan the last page can be
+        // minutes after the first, and there is no reason to withhold results
+        // that are already final.
+        setRows([...scanned])
+        setSelectedKeys(
+          new Set(
+            scanned.flatMap((row) =>
+              row.matches
+                .filter((match) => match.applicable)
+                .map((match) => match.key)
+            )
+          )
+        )
       }
 
       setRows(scanned)

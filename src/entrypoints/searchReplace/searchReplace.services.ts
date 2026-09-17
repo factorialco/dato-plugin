@@ -316,7 +316,7 @@ export const MAX_RESOLVE_PASSES = 50
  */
 const NESTED_PAGE_SIZE = 30
 
-const chunked = <T>(items: T[], size: number): T[][] => {
+export const chunked = <T>(items: T[], size: number): T[][] => {
   const chunks: T[][] = []
 
   for (let index = 0; index < items.length; index += size) {
@@ -345,6 +345,39 @@ const toPayload = (record: FullRecord): LinkedRecordPayload => ({
  * A batch that fails is retried one id at a time, so a single unreadable or
  * deleted reference costs only itself rather than everything beside it.
  */
+/** Runs `task` over `items`, `limit` at a time, preserving order. */
+export const mapWithLimit = async <T, R>(
+  items: T[],
+  limit: number,
+  task: (item: T) => Promise<R>
+): Promise<R[]> => {
+  const results: R[] = []
+  let cursor = 0
+
+  const workers = Array.from(
+    { length: Math.min(limit, items.length) },
+    async () => {
+      for (;;) {
+        const index = cursor++
+
+        if (index >= items.length) {
+          return
+        }
+
+        results[index] = await task(items[index])
+      }
+    }
+  )
+
+  await Promise.all(workers)
+
+  return results
+}
+
+/** Records fetched per request, and pages walked at once. */
+export const SCAN_BATCH = 30
+export const SCAN_PARALLEL = 5
+
 export const fetchLinkedRecords = async (
   client: Client,
   ids: string[]
@@ -377,6 +410,23 @@ export const fetchLinkedRecords = async (
 
   return Object.fromEntries(
     batches.flat().map((record) => [record.id, toPayload(record)])
+  )
+}
+
+/**
+ * The records themselves, by id, with their block payloads.
+ *
+ * Same batching as referenced records — a scan over a whole model was fetching
+ * them one at a time.
+ */
+export const fetchRecordsByIds = async (
+  client: Client,
+  ids: string[]
+): Promise<Record<string, FullRecord>> => {
+  const loaded = await fetchLinkedRecords(client, ids)
+
+  return Object.fromEntries(
+    Object.entries(loaded).map(([id, payload]) => [id, payload.record])
   )
 }
 
