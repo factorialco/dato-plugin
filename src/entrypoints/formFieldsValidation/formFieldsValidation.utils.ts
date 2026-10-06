@@ -13,6 +13,9 @@ export const REQUIRED_FIELD_TYPES_OBJECT = {
   consent: 'Consent Text'
 }
 
+/** Field types a form may hold more than once */
+export const REPEATABLE_FIELD_TYPES = ['consent']
+
 /**
  * Checks if there are duplicate field types in the form
  * Returns an object with hasDuplicates flag and the list of duplicated types
@@ -23,9 +26,11 @@ export const checkDuplicateFieldTypes = (
   const typeCount: Record<string, number> = {}
   const duplicatedTypes: string[] = []
 
-  formFieldTypes.forEach((type) => {
-    typeCount[type] = (typeCount[type] || 0) + 1
-  })
+  formFieldTypes
+    .filter((type) => !REPEATABLE_FIELD_TYPES.includes(type))
+    .forEach((type) => {
+      typeCount[type] = (typeCount[type] || 0) + 1
+    })
 
   Object.keys(typeCount).forEach((type) => {
     if (typeCount[type] >= 2) {
