@@ -20,12 +20,18 @@ describe(checkDuplicateFieldTypes, () => {
   it('reports each repeated type once', () => {
     expect(
       checkDuplicateFieldTypes([
-        'consent',
-        'consent',
-        'consent',
-        'contact_email'
+        'contact_email',
+        'contact_email',
+        'contact_email',
+        'consent'
       ])
-    ).toStrictEqual({ hasDuplicates: true, duplicatedTypes: ['consent'] })
+    ).toStrictEqual({ hasDuplicates: true, duplicatedTypes: ['contact_email'] })
+  })
+
+  it('allows several consent fields', () => {
+    expect(
+      checkDuplicateFieldTypes(['consent', 'consent', 'contact_email'])
+    ).toStrictEqual({ hasDuplicates: false, duplicatedTypes: [] })
   })
 })
 
@@ -47,13 +53,15 @@ describe(checkFormFieldsValidation, () => {
 
   it('reports missing and duplicated fields together', () => {
     const { isValid, validationErrors } = checkFormFieldsValidation([
-      'consent',
-      'consent'
+      'contact_email',
+      'contact_email'
     ])
 
     expect(isValid).toBeFalsy()
     expect(validationErrors).toHaveLength(2)
-    expect(validationErrors[0]).toContain('Remove duplicated fields - consent')
+    expect(validationErrors[0]).toContain(
+      'Remove duplicated fields - contact_email'
+    )
     expect(validationErrors[1]).toContain('Include required fields')
   })
 })
